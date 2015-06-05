@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 #
-# Copyrite (c) 2014 SecurityKISS Ltd (http://www.securitykiss.com)  
+# Copyrite (c) 2014 SecurityKISS Ltd (http://www.securitykiss.com)
 #
 # This file is part of rfw
 #
 # The MIT License (MIT)
 #
-# Yes, Mr patent attorney, you have nothing to do here. Find a decent job instead. 
+# Yes, Mr patent attorney, you have nothing to do here. Find a decent job instead.
 # Fight intellectual "property".
 #
 # Permission is hereby granted, free of charge, to any person obtaining
@@ -65,29 +65,46 @@ class CommandProcessor(Thread):
         while True:
             modify, rule, directives = self.cmd_queue.get()
             try:
-                rule_exists = rule in ruleset
+                if rule.target != 'CREATE':
+                    rule_exists = rule in ruleset
+                else:
+                    rule_exists = rule.chain in iptables.RULE_CHAINS
+
                 log.debug('{} rule_exists: {}'.format(rule, rule_exists))
- 
+
                 # check for duplicates, apply rule
                 if modify == 'I':
                     if rule_exists:
                         log.warn("Trying to insert existing rule: {}. Command ignored.".format(rule))
                     else:
+                        if rule.target == 'CREATE':
+                            modify = 'N'
+
                         Iptables.exe_rule(modify, rule)
                         # schedule expiry timeout if present. Only for Insert rules and only if the rule didn't exist before (so it was added now)
                         self.schedule_expiry(rule, directives)
-                        ruleset.add(rule)
+
+                        if rule.target != 'CREATE':
+                            ruleset.add(rule)
+                        else:
+                            iptables.RULE_CHAINS.add(rule.chain)
                 elif modify == 'D':
                     if rule_exists:
+                        if rule.target == 'CREATE':
+                            modify = 'X'
                         #TODO delete rules in the loop to delete actual iptables duplicates. It's to satisfy idempotency and plays well with common sense
                         Iptables.exe_rule(modify, rule)
-                        ruleset.discard(rule)
+                        if rule.target != 'CREATE':
+                            ruleset.discard(rule)
+                        else:
+                            iptables.RULE_CHAINS.remove(rule.chain)
                     else:
                         log.warn("Trying to delete not existing rule: {}. Command ignored.".format(rule))
                 elif modify == 'L':
                     #TODO rereading the iptables?
                     pass
-            finally:    
+
+            finally:
                 self.cmd_queue.task_done()
 
 
@@ -96,7 +113,7 @@ class CommandProcessor(Thread):
 
 
 class ExpiryManager(Thread):
-    
+
     # polling interval in seconds that determines time resolution of expire parameter
     POLL_INTERVAL = 1
 
@@ -109,7 +126,7 @@ class ExpiryManager(Thread):
         self.expiry_queue = expiry_queue
         self.setDaemon(True)
 
-    
+
     def run(self):
         # Not thread safe! It's OK here because we have single producer and single consumer, where consumer need not atomic 'peek and get'
         def peek(q):
@@ -141,7 +158,7 @@ class ExpiryManager(Thread):
                 self.expiry_queue.task_done()
 
 
-            
+
 class ServerRunner(Thread):
 
     def __init__(self, httpd):
@@ -153,7 +170,7 @@ class ServerRunner(Thread):
         sa = self.httpd.socket.getsockname()
         log.info("Serving HTTP on {} port {}".format(sa[0], sa[1]))
         self.httpd.serve_forever()
-        
+
 
 
 

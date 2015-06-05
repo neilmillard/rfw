@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 #
-# Copyrite (c) 2014 SecurityKISS Ltd (http://www.securitykiss.com)  
+# Copyrite (c) 2014 SecurityKISS Ltd (http://www.securitykiss.com)
 #
 # This file is part of rfw
 #
 # The MIT License (MIT)
 #
-# Yes, Mr patent attorney, you have nothing to do here. Find a decent job instead. 
+# Yes, Mr patent attorney, you have nothing to do here. Find a decent job instead.
 # Fight intellectual "property".
 #
 # Permission is hereby granted, free of charge, to any person obtaining
@@ -39,10 +39,10 @@ log = logging.getLogger('lib.{}'.format(__name__))
 log.addHandler(logging.NullHandler())
 
 # note that the 'in' attribute from iptables output was renamed to 'inp' to avoid python keyword clash
-IPTABLES_HEADERS =         ['num', 'pkts', 'bytes', 'target', 'prot', 'opt', 'in', 'out', 'source', 'destination'] 
+IPTABLES_HEADERS =         ['num', 'pkts', 'bytes', 'target', 'prot', 'opt', 'in', 'out', 'source', 'destination']
 RULE_ATTRS =      ['chain', 'num', 'pkts', 'bytes', 'target', 'prot', 'opt', 'inp', 'out', 'source', 'destination', 'extra']
-RULE_TARGETS =      ['DROP', 'ACCEPT', 'REJECT']
-RULE_CHAINS =       ['INPUT', 'OUTPUT', 'FORWARD']
+RULE_TARGETS =      ['DROP', 'ACCEPT', 'REJECT', 'CREATE']
+RULE_CHAINS = set(['INPUT', 'OUTPUT', 'FORWARD'])
 
 
 RuleProto = namedtuple('Rule', RULE_ATTRS)
@@ -152,7 +152,7 @@ class Iptables:
                 chain = m.group(1)
                 continue
             if "source" in line and "destination" in line:
-                # check if iptables output headers make sense 
+                # check if iptables output headers make sense
                 assert line.split()  == IPTABLES_HEADERS
                 continue
             if chain:
@@ -166,20 +166,25 @@ class Iptables:
                     rule = Rule(columns)
                     rules.append(rule)
         return rules
-    
-   
+
+
     @staticmethod
     def rule_to_command(r):
-        """Convert Rule object r to the list representing iptables command arguments like: 
+        """Convert Rule object r to the list representing iptables command arguments like:
         ['INPUT', '-p', 'tcp', '-d', '0.0.0.0/0', '-s', '1.2.3.4', '-j', 'ACCEPT']
         It is assumed that the rule is from trusted source (from Iptables.find())
         """
         #TODO handle extras e.g. 'extra': 'tcp dpt:7373 spt:34543'
         #TODO add validations
         #TODO handle wildcards
+
+        lcmd = [r.chain]
+
+        if r.target == 'CREATE':
+            return lcmd
+
         assert r.chain == 'INPUT' or r.chain == 'OUTPUT' or r.chain == 'FORWARD'
-        lcmd = []
-        lcmd.append(r.chain)
+
         if r.prot != 'all':
             lcmd.append('-p')
             lcmd.append(r.prot)
@@ -210,19 +215,20 @@ class Iptables:
 
     @staticmethod
     def exe_rule(modify, rule):
-        assert modify == 'I' or modify == 'D'
+        assert modify in ['I', 'D', 'X', 'N']
         lcmd = Iptables.rule_to_command(rule)
         return Iptables.exe(['-' + modify] + lcmd)
 
 
     @staticmethod
     def exe(lcmd):
+        print "here"
         cmd = [Iptables.ipt_path] + lcmd
         try:
             log.debug('Iptables.exe(): {}'.format(' '.join(cmd)))
             with Iptables.lock:
                 out = subprocess.check_output(cmd, stderr=subprocess.STDOUT)
-            if out: 
+            if out:
                 log.debug("Iptables.exe() output: {}".format(out))
             return out
         except subprocess.CalledProcessError, e:

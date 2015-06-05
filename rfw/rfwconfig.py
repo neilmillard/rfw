@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 #
-# Copyrite (c) 2014 SecurityKISS Ltd (http://www.securitykiss.com)  
+# Copyrite (c) 2014 SecurityKISS Ltd (http://www.securitykiss.com)
 #
 # This file is part of rfw
 #
 # The MIT License (MIT)
 #
-# Yes, Mr patent attorney, you have nothing to do here. Find a decent job instead. 
+# Yes, Mr patent attorney, you have nothing to do here. Find a decent job instead.
 # Fight intellectual "property".
 #
 # Permission is hereby granted, free of charge, to any person obtaining
@@ -38,7 +38,7 @@ class RfwConfig(config.Config):
 
     def __init__(self, path):
         self._whitelist = None
-        
+
         try:
             config.Config.__init__(self, path)
 
@@ -64,7 +64,7 @@ class RfwConfig(config.Config):
         except Exception, e:
             # other errors need to be wrapped to include the config file path info
             log.error(self.config_error(str(e)))
-            sys.exit(1)            
+            sys.exit(1)
 
         try:
             # provide more info for these options if not given correctly
@@ -75,24 +75,27 @@ class RfwConfig(config.Config):
             log.error(str(e))
             log.error('Before running rfw you must generate or import certificates. See /etc/rfw/deploy/README.rst')
             sys.exit(1)
- 
 
- 
+
+
 
     def is_outward_server(self):
         return self._getflag("outward.server", "outward.server not enabled. Ignoring outward.server.port and outward.server.ip if present.")
-    
+
     def outward_server_port(self):
         if self.is_outward_server():
+            print "Outward server found"
+
             port = self._get("outward.server.port")
             if port and iputil.validate_port(port):
                 return port
             else:
                 raise self.config_error("Wrong outward.server.port value. It should be a single number from the 1..65535 range")
         else:
+            print "Outward server not found"
             self.config_error("outward.server.port read while outward.server not enabled")
-    
-    
+
+
     def outward_server_ip(self):
         if self.is_outward_server():
             try:
@@ -101,13 +104,13 @@ class RfwConfig(config.Config):
                 raise self.config_error(str(e))
         else:
             raise self.config_error("outward.server.ip read while outward.server not enabled")
-    
+
     def outward_server_certfile(self):
         if self.is_outward_server():
             return self._getfile("outward.server.certfile")
         else:
             raise self.config_error("outward.server.certfile read while outward.server not enabled")
- 
+
 
     def outward_server_keyfile(self):
         if self.is_outward_server():
@@ -118,8 +121,8 @@ class RfwConfig(config.Config):
 
     def is_local_server(self):
         return self._getflag("local.server", "local.server not enabled. Ignoring local.server.port if present.")
-    
-    
+
+
     def local_server_port(self):
         if self.is_local_server():
             try:
@@ -132,17 +135,17 @@ class RfwConfig(config.Config):
                 raise self.config_error(str(e))
         else:
             raise self.config_error("local.server.port read while local.server not enabled")
-    
+
     def is_non_restful(self):
         return self._getflag("non.restful")
-    
+
     def is_local_server_authentication(self):
         if self.is_local_server():
             return self._getflag("local.server.authentication")
         else:
             raise self.config_error("local.server.authentication read while local.server not enabled")
-    
-    
+
+
     def auth_username(self):
         if self.is_outward_server() or self.is_local_server_authentication():
             try:
@@ -155,8 +158,8 @@ class RfwConfig(config.Config):
                 raise self.config_error(str(e))
         else:
             raise self.config_error("auth.username read while outward.server not enabled and local.server.authentication not enabled")
-    
-    
+
+
     def auth_password(self):
         if self.is_outward_server() or self.is_local_server_authentication():
             try:
@@ -169,7 +172,7 @@ class RfwConfig(config.Config):
                 raise self.config_error(str(e))
         else:
             raise self.config_error("auth.password read while outward.server not enabled and local.server.authentication not enabled")
-   
+
     def _chain_action(self, name):
         try:
             action = self._get(name)

@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 #
-# Copyrite (c) 2014 SecurityKISS Ltd (http://www.securitykiss.com)  
+# Copyrite (c) 2014 SecurityKISS Ltd (http://www.securitykiss.com)
 #
 # This file is part of rfw
 #
 # The MIT License (MIT)
 #
-# Yes, Mr patent attorney, you have nothing to do here. Find a decent job instead. 
+# Yes, Mr patent attorney, you have nothing to do here. Find a decent job instead.
 # Fight intellectual "property".
 #
 # Permission is hereby granted, free of charge, to any person obtaining
@@ -36,7 +36,7 @@ log = logging.getLogger("rfw.cmdparse")
 
 
 def convert_iface(iface):
-    """Convert iface string like 'any', 'eth', 'eth0' to iptables iface naming like *, eth+, eth0. 
+    """Convert iface string like 'any', 'eth', 'eth0' to iptables iface naming like *, eth+, eth0.
     """
     if iface == 'any':
         return '*'
@@ -72,54 +72,60 @@ def parse_command_path(path):
         return p
 
     p = path_parts(path)
+    print "p = ", p
 
     # for path = '/' return 'help' action
     if not p:
         return 'help', None
 
     action = p[0]
-   
+
+    print "action: ", action
+
     if action.upper() in iptables.RULE_TARGETS:
         try:
             return action, build_rule(p)
         except ValueError, e:
             raise PathError(path, e.message)
-    
+
     if action == 'list':
         if len(p) == 1:
             return action, None
         elif len(p) == 2:
             chain = p[1].upper()
-            if chain in iptables.RULE_CHAINS:
+            if chain in iptables.rule:
                 return action, chain
             else:
                 raise PathError(path, 'Wrong chain name for list command')
         else:
             raise PathError(path, 'Too many details for the list command')
-        
+
     raise PathError(path)
 
 
 # From the path parts tuple build and return Rule for drop/accept/reject type of command
 def build_rule(p):
     # There must be at least 4 parts like in /drop/input/eth0/1.2.3.4
-    if len(p) < 4:
+    if len(p) < 2:
         raise ValueError('Not enough details to construct the rule')
     target = p[0].upper()
     if target not in iptables.RULE_TARGETS:
         raise ValueError('The action should be one of {}'.format(iptables.RULE_TARGETS))
     chain = p[1].upper()
-    if chain not in iptables.RULE_CHAINS:
-        raise ValueError('The chain should be one of {}'.format(iptables.RULE_CHAINS))
-    iface1 = p[2]
-    if len(iface1) > 16:
-        raise ValueError('Interface name too long. Max 16 characters')
-    iface1 = convert_iface(iface1)
-    ip1 = iputil.validate_ip(p[3])
-    if not ip1:
-        raise ValueError('Incorrect IP address')
+    if target != 'CREATE' and chain not in iptables.RULE_CHAINS:
+        raise ValueError('When not creating one, the chain should be one of {}'.format(iptables.RULE_CHAINS))
 
-    
+    iface1 = None
+    ip1 = None
+    if len(p) > 2:
+        iface1 = p[2]
+        if len(iface1) > 16:
+            raise ValueError('Interface name too long. Max 16 characters')
+        iface1 = convert_iface(iface1)
+        ip1 = iputil.validate_ip(p[3])
+        if not ip1:
+            raise ValueError('Incorrect IP address')
+
     mask1 = None
     iface2 = None
     ip2 = None
@@ -197,7 +203,10 @@ def build_rule(p):
         if mask2:
             destination = '{}/{}'.format(destination, mask2)
     else:
-        assert 'Should not happen'
+        inp = iface1
+        out = iface1
+        source = '0.0.0.0/0'
+        destination = '0.0.0.0/0'
 
     return Rule({'target': target, 'chain': chain, 'inp': inp, 'out': out, 'source': source, 'destination': destination})
 
@@ -206,7 +215,8 @@ def build_rule(p):
 def parse_command_query(query):
     params = dict(urlparse.parse_qsl(query))
     ret = {}
-    
+    print params
+
     expire = params.get('expire')
     if expire:
         interval = timeutil.parse_interval(expire)
@@ -246,9 +256,16 @@ def parse_command(url):
     parsed = urlparse.urlparse(url)
     path, query = parsed.path, parsed.query
 
+    log.debug('[antomicx] path {} query: {}'.format(path, query))
+
+
     action, rule = parse_command_path(path)
     directives = parse_command_query(query)
 
-    return (action, rule, directives) 
+    print "action: ", action
+    print "rule: ", rule
+    print "directives: ", directives
+
+    return (action, rule, directives)
 
 
