@@ -183,7 +183,7 @@ class Iptables:
         if r.target == 'CREATE':
             return lcmd
 
-        assert r.chain == 'INPUT' or r.chain == 'OUTPUT' or r.chain == 'FORWARD'
+        assert r.chain in RULE_CHAINS
 
         if r.prot != 'all':
             lcmd.append('-p')
