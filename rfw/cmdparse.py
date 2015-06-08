@@ -206,12 +206,19 @@ def build_rule(p):
         source = '0.0.0.0/0'
         destination = '0.0.0.0/0'
     else:
-        inp = '*'
-        out = '*'
-        source = '0.0.0.0/0'
-        destination = ip1
+        inp = iface1
+        if iface2:
+            out = iface2
+        else:
+            out = '*'
+        source = ip1
+        destination = '0.0.0.0/0'
+        if ip2:
+            destination = ip2
         if mask1:
-            destination = '{}/{}'.format(destination, mask1)
+            source = '{}/{}'.format(source, mask1)
+        if mask2:
+            destination = '{}/{}'.format(destination, mask2)
 
     return Rule({'target': target, 'chain': chain, 'inp': inp, 'out': out, 'source': source, 'destination': destination})
 
