@@ -83,12 +83,11 @@ def create_requesthandlers(rfwconf, cmd_queue, expiry_queue):
     def process(handler, modify, urlpath):
         # modify should be 'D' for Delete or 'I' for Insert understood as -D and -I iptables flags
         assert modify in ['D', 'I', 'L']
-        log.debug('process {} urlpath: {}'.format(modify, urlpath))
 
         try:
             action, rule, directives = cmdparse.parse_command(urlpath)
 
-            log.debug('\nAction: {}\nRule: {}\nDirectives: {}'.format(action, rule, directives))
+            # log.debug('\nAction: {}\nRule: {}\nDirectives: {}'.format(action, rule, directives))
 
             if modify == 'L':
                 if action == 'help':
@@ -121,6 +120,16 @@ def create_requesthandlers(rfwconf, cmd_queue, expiry_queue):
                 ctup = (modify, rule, directives)
                 log.debug('PUT to Cmd Queue. Tuple: {}'.format(ctup))
                 cmd_queue.put_nowait(ctup)
+
+                # Make these rules persistent on file
+                import os.path
+                if os.path.isfile("/etc/init.d/iptables-persistent"):
+                    save_command = "/etc/init.d/iptables-persistent save"
+                else:
+                    raise Exception('No iptables-persistent command is installed. Please install it first!')
+                if save_command is not None:
+                    subprocess.call(save_command, shell=True)
+
                 return handler.http_resp(200, ctup)
             else:
                 raise Exception('Unrecognized command.')
@@ -306,7 +315,7 @@ def main():
     # TODO we may also need to ignore signal.SIGHUP in daemon mode
 
 
-
+    Iptables.loadChains()
     rules = Iptables.load().rules
     # TODO make logging more efficient by deferring arguments evaluation
     log.debug("===== rules =====\n{}".format("\n".join(map(str, rules))))
@@ -350,8 +359,6 @@ def main():
 
     # wait forever
     time.sleep(1e9)
-
-
 
 if __name__ == "__main__":
     main()

@@ -61,10 +61,12 @@ class CommandProcessor(Thread):
 
 
     def run(self):
-        ruleset = set(Iptables.read_simple_rules())
+        Iptables.read_chains()
+        ruleset = set(Iptables.read_simple_rules(matching_num=False))
         while True:
             modify, rule, directives = self.cmd_queue.get()
             try:
+                # Modify the rule to nullify parameters which need not to be included in the search
                 if rule.target != 'CREATE':
                     rule_exists = rule in ruleset
                 else:
@@ -88,6 +90,7 @@ class CommandProcessor(Thread):
                             ruleset.add(rule)
                         else:
                             iptables.RULE_CHAINS.add(rule.chain)
+                            iptables.RULE_TARGETS.add(rule.chain)
                 elif modify == 'D':
                     if rule_exists:
                         if rule.target == 'CREATE':
@@ -97,8 +100,10 @@ class CommandProcessor(Thread):
                         if rule.target != 'CREATE':
                             ruleset.discard(rule)
                         else:
+                            iptables.RULE_TARGETS.remove(rule.chain)
                             iptables.RULE_CHAINS.remove(rule.chain)
                     else:
+                        print("non existing rule")
                         log.warn("Trying to delete not existing rule: {}. Command ignored.".format(rule))
                 elif modify == 'L':
                     #TODO rereading the iptables?

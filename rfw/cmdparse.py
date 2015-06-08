@@ -72,15 +72,12 @@ def parse_command_path(path):
         return p
 
     p = path_parts(path)
-    print "p = ", p
 
     # for path = '/' return 'help' action
     if not p:
         return 'help', None
 
     action = p[0]
-
-    print "action: ", action
 
     if action.upper() in iptables.RULE_TARGETS:
         try:
@@ -89,11 +86,12 @@ def parse_command_path(path):
             raise PathError(path, e.message)
 
     if action == 'list':
+
         if len(p) == 1:
             return action, None
         elif len(p) == 2:
             chain = p[1].upper()
-            if chain in iptables.rule:
+            if chain in iptables.RULE_CHAINS:
                 return action, chain
             else:
                 raise PathError(path, 'Wrong chain name for list command')
@@ -222,7 +220,6 @@ def build_rule(p):
 def parse_command_query(query):
     params = dict(urlparse.parse_qsl(query))
     ret = {}
-    print params
 
     expire = params.get('expire')
     if expire:
@@ -263,16 +260,9 @@ def parse_command(url):
     parsed = urlparse.urlparse(url)
     path, query = parsed.path, parsed.query
 
-    log.debug('[antomicx] path {} query: {}'.format(path, query))
-
-
     action, rule = parse_command_path(path)
     directives = parse_command_query(query)
 
-    print "action: ", action
-    print "rule: ", rule
-    print "directives: ", directives
-
-    return (action, rule, directives)
+    return action, rule, directives
 
 

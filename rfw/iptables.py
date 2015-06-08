@@ -28,9 +28,13 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-import inspect, re, subprocess, logging, json
+import inspect
+import re
+import subprocess
+import logging
 from collections import namedtuple
 from threading import RLock
+
 
 # Follow the logging convention:
 # - Modules intended as reusable libraries have names 'lib.<modulename>' what allows to configure single parent 'lib' logger for all libraries in the consuming application
@@ -41,7 +45,7 @@ log.addHandler(logging.NullHandler())
 # note that the 'in' attribute from iptables output was renamed to 'inp' to avoid python keyword clash
 IPTABLES_HEADERS =         ['num', 'pkts', 'bytes', 'target', 'prot', 'opt', 'in', 'out', 'source', 'destination']
 RULE_ATTRS =      ['chain', 'num', 'pkts', 'bytes', 'target', 'prot', 'opt', 'inp', 'out', 'source', 'destination', 'extra']
-RULE_TARGETS =      ['DROP', 'ACCEPT', 'REJECT', 'CREATE']
+RULE_TARGETS = set(['DROP', 'ACCEPT', 'REJECT', 'CREATE'])
 RULE_CHAINS = set(['INPUT', 'OUTPUT', 'FORWARD'])
 
 
@@ -108,6 +112,10 @@ class Iptables:
         return inst
 
     @staticmethod
+    def loadChains():
+        Iptables._iptables_init_chains()
+
+    @staticmethod
     def verify_install():
         """Check if iptables installed
         """
@@ -165,7 +173,21 @@ class Iptables:
                     columns.insert(0, chain)
                     rule = Rule(columns)
                     rules.append(rule)
+
         return rules
+
+    @staticmethod
+    def _iptables_init_chains():
+        """List  iptables chains."""
+        out = Iptables.exe(['-L'])
+        for line in out.split('\n'):
+            line = line.strip()
+            if not line:
+                continue
+            m = re.match(r"Chain (\w+) .*", line)
+            if m and m.group(1) not in RULE_CHAINS:
+                RULE_TARGETS.add(m.group(1))
+                RULE_CHAINS.add(m.group(1))
 
 
     @staticmethod
@@ -202,6 +224,14 @@ class Iptables:
                     lcmd.append('--sport')
                     lcmd.append(sport)
 
+        if r.inp != '*':
+            lcmd.append('-i')
+            lcmd.append(r.inp)
+
+        if r.out != '*':
+            lcmd.append('-o')
+            lcmd.append(r.out)
+
         if r.destination != '0.0.0.0/0':
             lcmd.append('-d')
             lcmd.append(r.destination)
@@ -210,6 +240,7 @@ class Iptables:
             lcmd.append(r.source)
         lcmd.append('-j')
         lcmd.append(r.target)
+
         return lcmd
 
 
@@ -222,7 +253,6 @@ class Iptables:
 
     @staticmethod
     def exe(lcmd):
-        print "here"
         cmd = [Iptables.ipt_path] + lcmd
         try:
             log.debug('Iptables.exe(): {}'.format(' '.join(cmd)))
@@ -236,24 +266,40 @@ class Iptables:
             raise e
 
     @staticmethod
-    def read_simple_rules(chain=None):
+    def read_simple_rules(chain=None, matching_num=True):
         assert chain is None or chain in RULE_CHAINS
         rules = []
         ipt = Iptables.load()
+
         # rfw originated rules may have only DROP/ACCEPT/REJECT targets and do not specify protocol and do not have extra args like ports
         if chain == 'INPUT' or chain is None:
-            input_rules = ipt.find({'target': RULE_TARGETS, 'chain': ['INPUT'], 'destination': ['0.0.0.0/0'], 'out': ['*'], 'prot': ['all'], 'extra': ['']})
+            input_rules = ipt.find({'target': RULE_TARGETS, 'chain': ['INPUT'], 'destination': ['0.0.0.0/0'], 'out': ['*'], 'prot': ['all'], 'extra': ['']}, matching_num)
             rules.extend(input_rules)
         if chain == 'OUTPUT' or chain is None:
-            output_rules = ipt.find({'target': RULE_TARGETS, 'chain': ['OUTPUT'], 'source': ['0.0.0.0/0'], 'inp': ['*'], 'prot': ['all'], 'extra': ['']})
+            output_rules = ipt.find({'target': RULE_TARGETS, 'chain': ['OUTPUT'], 'source': ['0.0.0.0/0'], 'inp': ['*'], 'prot': ['all'], 'extra': ['']}, matching_num)
             rules.extend(output_rules)
         if chain == 'FORWARD' or chain is None:
-            forward_rules = ipt.find({'target': RULE_TARGETS, 'chain': ['FORWARD'], 'prot': ['all'], 'extra': ['']})
+            forward_rules = ipt.find({'target': RULE_TARGETS, 'chain': ['FORWARD'], 'prot': ['all'], 'extra': ['']}, matching_num)
             rules.extend(forward_rules)
+        if (chain not in ['INPUT', 'OUTPUT', 'FORWARD'] and chain in RULE_CHAINS) or chain is None:
+
+            for chain_loop in RULE_CHAINS:
+                if chain_loop in ['INPUT', 'OUTPUT', 'FORWARD']:
+                    continue
+                if chain is not None and chain != '' and chain != chain_loop:
+                    continue
+
+                input_rules = ipt.find({'target': RULE_TARGETS, 'chain': [chain_loop]}, matching_num)
+                rules.extend(input_rules)
+
         return rules
 
+    @staticmethod
+    def read_chains():
+        Iptables.loadChains()
+
     # find is a non-static method as it should be called after instantiation with Iptables.load()
-    def find(self, query):
+    def find(self, query, matching_num=True):
         """Find rules based on query
         For example:
             query = {'chain': ['INPUT', 'OUTPUT'], 'prot': ['all'], 'extra': ['']}
@@ -269,7 +315,35 @@ class Iptables:
                     matched_all = False
                     break
             if matched_all:
-                ret.append(r)
+                if not matching_num:
+                    new_rule = Rule({
+                        'chain': r.chain,
+                        'num': None,
+                        'pkts': None,
+                        'bytes': None,
+                        'target': r.target,
+                        'prot': r.prot,
+                        'opt': r.opt,
+                        'inp': r.inp,
+                        'out': r.out,
+                        'source': r.source,
+                        'destination': r.destination,
+                        'extra': r.extra
+                    })
+                else:
+                    new_rule = Rule({
+                        'chain': r.chain,
+                        'target': r.target,
+                        'prot': r.prot,
+                        'opt': r.opt,
+                        'inp': r.inp,
+                        'out': r.out,
+                        'source': r.source,
+                        'destination': r.destination,
+                        'extra': r.extra
+                    })
+                ret.append(new_rule)
+
         return ret
 
 
