@@ -115,19 +115,25 @@ def build_rule(p):
 
     iface1 = None
     ip1 = None
+    port1 = None
     if len(p) > 2:
         iface1 = p[2]
         if len(iface1) > 16:
             raise ValueError('Interface name too long. Max 16 characters')
         iface1 = convert_iface(iface1)
-        ip1 = iputil.validate_ip(p[3])
-        if not ip1:
-            raise ValueError('Incorrect IP address')
+
+        # Extract an endpoint
+        ip1, port1 = iputil.extractEndpoint(p[3])
+
+        if not ip1 or (port1 is not None and not port1):
+            raise ValueError('Incorrect IP endpoint')
 
     mask1 = None
     iface2 = None
     ip2 = None
+    port2 = None
     mask2 = None
+    extra = None
     if len(p) > 4:
         i = 4
         # optionally the netmask like: /drop/input/eth0/1.2.3.4/24
@@ -145,17 +151,16 @@ def build_rule(p):
                 raise ValueError('Interface name too long. Max 16 characters')
             iface2 = convert_iface(iface2)
             if len(p) > i:
-                ip2 = iputil.validate_ip(p[i])
+                ip2, port2 = iputil.extractEndpoint(p[i])
                 i = i + 1
-                if not ip2:
-                    raise ValueError('Incorrect IP address or netmask')
+                if not ip2 or (port2 is not None and not port2):
+                    raise ValueError('Incorrect IP endpoint or netmask')
                 if len(p) > i:
                     # now it must be the correct netmask if something was given after IP
                     if iputil.validate_mask_limit(p[i]):
                         mask2 = p[i]
                     else:
                         raise ValueError('Incorrect netmask value')
-
 
     if chain in ['INPUT', 'OUTPUT']:
         if len(p) > 5:
@@ -178,6 +183,8 @@ def build_rule(p):
         if mask1:
             source = '{}/{}'.format(source, mask1)
         destination = '0.0.0.0/0'
+        if port1 is not None:
+            extra = 'spt:' + port1
     elif chain == 'OUTPUT':
         inp = '*'
         out = iface1
@@ -185,6 +192,8 @@ def build_rule(p):
         destination = ip1
         if mask1:
             destination = '{}/{}'.format(destination, mask1)
+        if port1 is not None:
+            extra = 'dpt:' + port1
     elif chain == 'FORWARD':
         inp = iface1
         if iface2:
@@ -200,6 +209,10 @@ def build_rule(p):
             destination = ip2
         if mask2:
             destination = '{}/{}'.format(destination, mask2)
+        if port1 is not None:
+            extra = 'spt:' + port1
+        if port2 is not None:
+            extra = extra + ' dpt:' + port2 if extra is not None else 'dpt:' + port2
     elif target == 'CREATE':
         inp = iface1
         out = iface1
@@ -219,8 +232,13 @@ def build_rule(p):
             source = '{}/{}'.format(source, mask1)
         if mask2:
             destination = '{}/{}'.format(destination, mask2)
-
-    return Rule({'target': target, 'chain': chain, 'inp': inp, 'out': out, 'source': source, 'destination': destination})
+        if port1 is not None:
+            extra = 'spt:' + port1
+        if port2 is not None:
+            extra = extra + ' dpt:' + port2 if extra is not None else 'dpt:' + port2
+    if extra is None:
+        extra = ''
+    return Rule({'target': target, 'chain': chain, 'inp': inp, 'out': out, 'source': source, 'destination': destination, 'extra': extra})
 
 
 

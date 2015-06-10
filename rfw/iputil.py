@@ -180,4 +180,13 @@ def validate_mask_limit(mask):
     else:
         return False
 
-
+def extractEndpoint(endpoint):
+    port = None
+    if ':' in endpoint:
+        # ip:port case, let's separate the two
+        endpoint_parts = endpoint.split(':')
+        ip = endpoint_parts[0]
+        port = endpoint_parts[1]
+    else:
+        ip = endpoint
+    return validate_ip(ip), (validate_port(port) if port is not None else None)

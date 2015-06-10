@@ -79,7 +79,8 @@ class Rule(RuleProto):
         """
         if isinstance(other, self.__class__):
             return self.chain == other.chain and self.target == other.target and self.prot == other.prot and self.opt == other.opt \
-                and self.inp == other.inp and self.out == other.out and self.source == other.source and self.destination == other.destination
+                and self.inp == other.inp and self.out == other.out and self.source == other.source and self.destination == other.destination \
+                and self.extra == other.extra
         else:
             return False
 
@@ -247,7 +248,9 @@ class Iptables:
     @staticmethod
     def exe_rule(modify, rule):
         assert modify in ['I', 'D', 'X', 'N']
+        print rule
         lcmd = Iptables.rule_to_command(rule)
+        print lcmd
         return Iptables.exe(['-' + modify] + lcmd)
 
 

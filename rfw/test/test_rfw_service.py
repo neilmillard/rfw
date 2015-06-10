@@ -12,6 +12,12 @@ class CmdParseTest(TestCase):
         self.assertEqual( 
                 cmdparse.parse_command_path('/drop/input/eth /5.6.7.8/'), 
                     ('drop', Rule(chain='INPUT', num=None, pkts=None, bytes=None, target='DROP', prot='all', opt='--', inp='eth+', out='*', source='5.6.7.8', destination='0.0.0.0/0', extra='')))
+        self.assertEqual(
+            cmdparse.parse_command_path('/drop/input/any/5.6.7.8:5678/'),
+            ('drop', Rule(chain='INPUT', num=None, pkts=None, bytes=None, target='DROP', prot='all', opt='--', inp='*', out='*', source='5.6.7.8', destination='0.0.0.0/0', extra='spt:5678')))
+        self.assertEqual(
+            cmdparse.parse_command_path('/drop/output/any/5.6.7.8:5678/'),
+            ('drop', Rule(chain='OUTPUT', num=None, pkts=None, bytes=None, target='DROP', prot='all', opt='--', inp='*', out='*', source='0.0.0.0/0', destination='5.6.7.8', extra='dpt:5678')))
 
 
 
@@ -34,7 +40,18 @@ class IpUtilTest(TestCase):
     def test_ip_in_list(self):
         self.assertEqual(iputil.ip_in_list('1.2.0.0/16', ['1.2.3.4']), True)
 
+    def test_extract_endpoint(self):
+        ip, port = iputil.extractEndpoint('127.0.0.1:7865')
+        self.assertEqual('127.0.0.1', ip)
+        self.assertEqual('7865', port)
 
+        ip, port = iputil.extractEndpoint('127.0.0.1')
+        self.assertEqual('127.0.0.1', ip)
+        self.assertEqual(None, port)
+
+        ip, port = iputil.extractEndpoint('5.c.7.6:6543')
+        self.assertEqual(False, ip)
+        self.assertEqual('6543', port)
 
 #TODO extract reusable libraries along with testcases
 class TimeUtilTest(TestCase):
