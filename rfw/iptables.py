@@ -248,9 +248,9 @@ class Iptables:
     @staticmethod
     def exe_rule(modify, rule):
         assert modify in ['I', 'D', 'X', 'N']
-        print rule
+        if rule.target is None:
+            return ""
         lcmd = Iptables.rule_to_command(rule)
-        print lcmd
         return Iptables.exe(['-' + modify] + lcmd)
 
 
@@ -276,13 +276,13 @@ class Iptables:
 
         # rfw originated rules may have only DROP/ACCEPT/REJECT targets and do not specify protocol and do not have extra args like ports
         if chain == 'INPUT' or chain is None:
-            input_rules = ipt.find({'target': RULE_TARGETS, 'chain': ['INPUT'], 'destination': ['0.0.0.0/0'], 'out': ['*'], 'prot': ['all'], 'extra': ['']}, matching_num)
+            input_rules = ipt.find({'target': RULE_TARGETS, 'chain': ['INPUT'], 'destination': ['0.0.0.0/0'], 'out': ['*']}, matching_num)
             rules.extend(input_rules)
         if chain == 'OUTPUT' or chain is None:
-            output_rules = ipt.find({'target': RULE_TARGETS, 'chain': ['OUTPUT'], 'source': ['0.0.0.0/0'], 'inp': ['*'], 'prot': ['all'], 'extra': ['']}, matching_num)
+            output_rules = ipt.find({'target': RULE_TARGETS, 'chain': ['OUTPUT'], 'source': ['0.0.0.0/0'], 'inp': ['*']}, matching_num)
             rules.extend(output_rules)
         if chain == 'FORWARD' or chain is None:
-            forward_rules = ipt.find({'target': RULE_TARGETS, 'chain': ['FORWARD'], 'prot': ['all'], 'extra': ['']}, matching_num)
+            forward_rules = ipt.find({'target': RULE_TARGETS, 'chain': ['FORWARD']}, matching_num)
             rules.extend(forward_rules)
         if (chain not in ['INPUT', 'OUTPUT', 'FORWARD'] and chain in RULE_CHAINS) or chain is None:
 
@@ -292,8 +292,21 @@ class Iptables:
                 if chain is not None and chain != '' and chain != chain_loop:
                     continue
 
-                input_rules = ipt.find({'target': RULE_TARGETS, 'chain': [chain_loop]}, matching_num)
-                rules.extend(input_rules)
+                chain_rules = ipt.find({'target': RULE_TARGETS, 'chain': [chain_loop]}, matching_num)
+                if len(chain_rules) == 0:
+                    # No rules found, create a fake one for this chain
+                    chain_rules.append(Rule({
+                        'chain': chain_loop,
+                        'target': None,
+                        'prot': None,
+                        'opt': None,
+                        'inp': None,
+                        'out': None,
+                        'source': None,
+                        'destination': None,
+                        'extra': None}))
+
+                rules.extend(chain_rules)
 
         return rules
 
@@ -310,6 +323,7 @@ class Iptables:
             (chain == INPUT or chain == OUTPUT) and prot == all and extra == ''
         """
         ret = []
+
         for r in self.rules:
             matched_all = True    # be optimistic, if inner loop does not break, it means we matched all clauses
             for param, vals in query.items():
@@ -345,6 +359,7 @@ class Iptables:
                         'destination': r.destination,
                         'extra': r.extra
                     })
+
                 ret.append(new_rule)
 
         return ret
