@@ -211,8 +211,10 @@ def build_rule(p):
             destination = '{}/{}'.format(destination, mask2)
         if port1 is not None:
             extra = 'spt:' + port1
+            prot = 'tcp'
         if port2 is not None:
             extra = extra + ' dpt:' + port2 if extra is not None else 'dpt:' + port2
+            prot = 'tcp'
     elif target == 'CREATE':
         inp = iface1
         out = iface1
@@ -234,11 +236,13 @@ def build_rule(p):
             destination = '{}/{}'.format(destination, mask2)
         if port1 is not None:
             extra = 'spt:' + port1
+            prot = 'tcp'
         if port2 is not None:
             extra = extra + ' dpt:' + port2 if extra is not None else 'dpt:' + port2
+            prot = 'tcp'
     if extra is None:
         extra = ''
-    return Rule({'target': target, 'chain': chain, 'inp': inp, 'out': out, 'source': source, 'destination': destination, 'extra': extra})
+    return Rule({'target': target, 'chain': chain, 'prot': prot, 'inp': inp, 'out': out, 'source': source, 'destination': destination, 'extra': extra})
 
 
 
