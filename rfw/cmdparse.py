@@ -185,6 +185,7 @@ def build_rule(p):
         destination = '0.0.0.0/0'
         if port1 is not None:
             extra = 'spt:' + port1
+            prot = 'tcp'
     elif chain == 'OUTPUT':
         inp = '*'
         out = iface1
@@ -194,6 +195,7 @@ def build_rule(p):
             destination = '{}/{}'.format(destination, mask1)
         if port1 is not None:
             extra = 'dpt:' + port1
+            prot = 'tcp'
     elif chain == 'FORWARD':
         inp = iface1
         if iface2:
