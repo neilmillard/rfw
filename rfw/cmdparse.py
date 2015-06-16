@@ -133,7 +133,7 @@ def build_rule(p):
     ip2 = None
     port2 = None
     mask2 = None
-    extra = None
+    extra = ''
     prot = 'all'
     if len(p) > 4:
         i = 4
@@ -185,7 +185,9 @@ def build_rule(p):
             source = '{}/{}'.format(source, mask1)
         destination = '0.0.0.0/0'
         if port1 is not None:
-            extra = 'spt:' + port1
+            if 'tcp' not in extra:
+                extra = ('tcp ' + extra).strip()
+            extra = extra + ' spt:' + port1
             prot = 'tcp'
     elif chain == 'OUTPUT':
         inp = '*'
@@ -195,7 +197,9 @@ def build_rule(p):
         if mask1:
             destination = '{}/{}'.format(destination, mask1)
         if port1 is not None:
-            extra = 'dpt:' + port1
+            if 'tcp' not in extra:
+                extra = ('tcp ' + extra).strip()
+            extra = extra + ' dpt:' + port1
             prot = 'tcp'
     elif chain == 'FORWARD':
         inp = iface1
@@ -213,9 +217,13 @@ def build_rule(p):
         if mask2:
             destination = '{}/{}'.format(destination, mask2)
         if port1 is not None:
-            extra = 'spt:' + port1
+            if 'tcp' not in extra:
+                extra = ('tcp ' + extra).strip()
+            extra = extra + ' spt:' + port1
             prot = 'tcp'
         if port2 is not None:
+            if 'tcp' not in extra:
+                extra = ('tcp ' + extra).strip()
             extra = extra + ' dpt:' + port2 if extra is not None else 'dpt:' + port2
             prot = 'tcp'
     elif target == 'CREATE':
@@ -238,13 +246,16 @@ def build_rule(p):
         if mask2:
             destination = '{}/{}'.format(destination, mask2)
         if port1 is not None:
-            extra = 'spt:' + port1
+            if 'tcp' not in extra:
+                extra = ('tcp ' + extra).strip()
+            extra = extra + ' spt:' + port1
             prot = 'tcp'
         if port2 is not None:
+            if 'tcp' not in extra:
+                extra = ('tcp ' + extra).strip()
             extra = extra + ' dpt:' + port2 if extra is not None else 'dpt:' + port2
             prot = 'tcp'
-    if extra is None:
-        extra = ''
+
     return Rule({'target': target, 'chain': chain, 'prot': prot, 'inp': inp, 'out': out, 'source': source, 'destination': destination, 'extra': extra})
 
 
