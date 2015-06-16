@@ -218,11 +218,11 @@ class Iptables:
             for e in es:
                 if e[:4] == 'dpt:':
                     dport = e.split(':')[1]
-                    lcmd.append('--dport')
+                    lcmd.append('-dport')
                     lcmd.append(dport)
                 if e[:4] == 'spt:':
                     sport = e.split(':')[1]
-                    lcmd.append('--sport')
+                    lcmd.append('-sport')
                     lcmd.append(sport)
 
         if r.inp != '*':
