@@ -134,6 +134,7 @@ def build_rule(p):
     port2 = None
     mask2 = None
     extra = None
+    prot = 'all'
     if len(p) > 4:
         i = 4
         # optionally the netmask like: /drop/input/eth0/1.2.3.4/24
