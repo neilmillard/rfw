@@ -48,7 +48,7 @@ class post_install(install):
         install.run(self)
         # custom post install message
         print('\n\nBefore running rfw you must generate or import certificates. See /etc/rfw/deploy/README.rst\n\n')
-        print('\n\nTo install the RFW system script, please run \n\n\t\tupdate-rc.d rfw defaults\n\n')
+        print('To install the RFW system script, please run \n\n\t\tupdate-rc.d rfw defaults\n\t\tchmod +x /etc/init.d/rfw\n')
 
 
 
