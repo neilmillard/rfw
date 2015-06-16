@@ -48,6 +48,7 @@ class post_install(install):
         install.run(self)
         # custom post install message
         print('\n\nBefore running rfw you must generate or import certificates. See /etc/rfw/deploy/README.rst\n\n')
+        print('\n\nTo install the RFW system script, please run \n\n\t\tupdate-rc.d rfw defaults\n\n')
 
 
 
@@ -85,7 +86,7 @@ setup(
     url = "https://github.com/securitykiss-com/rfw",
     packages = ['rfw'],
     scripts = ['bin/rfw'],
-    data_files = [  ('/etc/rfw', ['config/rfw.conf', 'config/white.list']), ('/etc/rfw/deploy', ['config/deploy/rfwgen', 'config/deploy/README.rst']), ('/etc/rfw/ssl', ['config/ssl/PUT_SERVER_KEYS_HERE'])],
+    data_files = [  ('/etc/init.d', ['config/init.d/rfw']),('/etc/rfw', ['config/rfw.conf', 'config/white.list']), ('/etc/rfw/deploy', ['config/deploy/rfwgen', 'config/deploy/README.rst']), ('/etc/rfw/ssl', ['config/ssl/PUT_SERVER_KEYS_HERE'])],
     long_description = read('README.rst', 'CHANGES.rst'),
     cmdclass = {'install': post_install},
     classifiers=[
