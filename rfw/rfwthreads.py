@@ -108,7 +108,9 @@ class CommandProcessor(Thread):
                 elif modify == 'L':
                     #TODO rereading the iptables?
                     pass
-
+            # Hack to prevent this exception to reach the threading code, preventing this thread from running more than this
+            except Exception:
+                pass
             finally:
                 self.cmd_queue.task_done()
 
