@@ -115,10 +115,6 @@ class CommandProcessor(Thread):
                 self.cmd_queue.task_done()
 
 
-
-
-
-
 class ExpiryManager(Thread):
 
     # polling interval in seconds that determines time resolution of expire parameter

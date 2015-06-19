@@ -189,4 +189,13 @@ def extractEndpoint(endpoint):
         port = endpoint_parts[1]
     else:
         ip = endpoint
-    return validate_ip(ip), (validate_port(port) if port is not None else None)
+
+    ip_validation = validate_ip(ip)
+    port_validation = validate_port(port) if port is not None else None
+
+    if ip_validation and ip == '0.0.0.0':
+        if port is not None:
+            ip_validation, port_validation = False, False
+        else:
+            ip_validation = '0.0.0.0/0'
+    return ip_validation, port_validation
