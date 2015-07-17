@@ -255,6 +255,10 @@ def build_rule(p):
                 extra = ('tcp ' + extra).strip()
             extra = extra + ' dpt:' + port2 if extra is not None else 'dpt:' + port2
             prot = 'tcp'
+        if target == 'SNAT':
+            extra = extra + ' to:' + destination
+            destination = '0.0.0.0/0' # Reset destination in order to prevent it from being appended
+
 
     return Rule({'target': target, 'chain': chain, 'prot': prot, 'inp': inp, 'out': out, 'source': source, 'destination': destination, 'extra': extra})
 

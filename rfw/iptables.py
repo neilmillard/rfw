@@ -45,8 +45,8 @@ log.addHandler(logging.NullHandler())
 # note that the 'in' attribute from iptables output was renamed to 'inp' to avoid python keyword clash
 IPTABLES_HEADERS =         ['num', 'pkts', 'bytes', 'target', 'prot', 'opt', 'in', 'out', 'source', 'destination']
 RULE_ATTRS =      ['chain', 'num', 'pkts', 'bytes', 'target', 'prot', 'opt', 'inp', 'out', 'source', 'destination', 'extra']
-RULE_TARGETS = set(['DROP', 'ACCEPT', 'REJECT', 'CREATE'])
-RULE_CHAINS = set(['INPUT', 'OUTPUT', 'FORWARD'])
+RULE_TARGETS = set(['DROP', 'ACCEPT', 'REJECT', 'CREATE', 'SNAT'])
+RULE_CHAINS = set(['INPUT', 'OUTPUT', 'FORWARD', 'POSTROUTING'])
 
 
 RuleProto = namedtuple('Rule', RULE_ATTRS)
@@ -203,7 +203,13 @@ class Iptables:
 
         lcmd = [r.chain]
 
+        if r.chain == 'POSTROUTING':
+            lcmd.append('-t nat')
+
         if r.target == 'CREATE':
+            if ':' in r.chain:
+                new_chain = r.chain.split(':')[1]
+                lcmd.append(new_chain)
             return lcmd
 
         assert r.chain in RULE_CHAINS
@@ -211,6 +217,9 @@ class Iptables:
         if r.prot != 'all':
             lcmd.append('-p')
             lcmd.append(r.prot)
+
+        lcmd.append('-j')
+        lcmd.append(r.target)
 
         # TODO enhance. For now handle only source and destination port
         if r.extra:
@@ -224,6 +233,10 @@ class Iptables:
                     sport = e.split(':')[1]
                     lcmd.append('--sport')
                     lcmd.append(sport)
+                if e[:3] == 'to:':
+                    daddr = e.split(':')[1]
+                    lcmd.append('--to-source')
+                    lcmd.append(daddr)
 
         if r.inp != '*':
             lcmd.append('-i')
@@ -239,15 +252,14 @@ class Iptables:
         if r.source != '0.0.0.0/0':
             lcmd.append('-s')
             lcmd.append(r.source)
-        lcmd.append('-j')
-        lcmd.append(r.target)
+
 
         return lcmd
 
 
     @staticmethod
     def exe_rule(modify, rule):
-        assert modify in ['I', 'D', 'X', 'N']
+        assert modify in ['I', 'D', 'X', 'N', 'E']
         if rule.target is None:
             return ""
         lcmd = Iptables.rule_to_command(rule)
@@ -265,8 +277,17 @@ class Iptables:
                 log.debug("Iptables.exe() output: {}".format(out))
             return out
         except subprocess.CalledProcessError, e:
-            log.error("Error code {} returned when called '{}'. Command output: '{}'".format(e.returncode, e.cmd, e.output))
-            raise e
+            # try with a direct subprocess call first
+            try:
+                retry_command = ''
+                for key in cmd:
+                    retry_command += (key + ' ')
+
+                print "Retrying with: ", retry_command
+                out = subprocess.call(retry_command, shell=True)
+            except subprocess.CalledProcessError, e:
+                log.error("Error code {} returned when called '{}'. Command output: '{}'".format(e.returncode, e.cmd, e.output))
+                raise e
 
     @staticmethod
     def read_simple_rules(chain=None, matching_num=True):

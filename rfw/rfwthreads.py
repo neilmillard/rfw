@@ -70,7 +70,11 @@ class CommandProcessor(Thread):
                 if rule.target != 'CREATE':
                     rule_exists = rule in ruleset
                 else:
-                    rule_exists = rule.chain in iptables.RULE_CHAINS
+                    if ':' in rule.chain:
+                        new_chain = rule.chain.split(':')[1]
+                        rule_exists = new_chain in iptables.RULE_CHAINS
+                    else:
+                        rule_exists = rule.chain in iptables.RULE_CHAINS
 
                 log.debug('{} rule_exists: {}'.format(rule, rule_exists))
 
@@ -81,6 +85,8 @@ class CommandProcessor(Thread):
                     else:
                         if rule.target == 'CREATE':
                             modify = 'N'
+                        if ':' in rule.chain: # renaming a chain
+                            modify = 'E'
 
                         Iptables.exe_rule(modify, rule)
                         # schedule expiry timeout if present. Only for Insert rules and only if the rule didn't exist before (so it was added now)
@@ -89,8 +95,15 @@ class CommandProcessor(Thread):
                         if rule.target != 'CREATE':
                             ruleset.add(rule)
                         else:
-                            iptables.RULE_CHAINS.add(rule.chain)
-                            iptables.RULE_TARGETS.add(rule.chain)
+                            if ':' in rule.chain:
+                                old_chain = rule.chain.split(':')[0]
+                                new_chain = rule.chain.split(':')[1]
+                                iptables.RULE_CHAINS.remove(old_chain)
+                                iptables.RULE_CHAINS.add(new_chain)
+                                iptables.RULE_TARGETS.add(rule.chain)
+                            else:
+                                iptables.RULE_CHAINS.add(rule.chain)
+                                iptables.RULE_TARGETS.add(rule.chain)
                 elif modify == 'D':
                     if rule_exists:
                         if rule.target == 'CREATE':
