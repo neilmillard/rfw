@@ -28,11 +28,16 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-import logging, sys, types, os.path, re
-import config, iputil, timeutil
-from ConfigParser import NoOptionError
+import logging
+import sys
+from configparser import NoOptionError
+
+import config
+import iputil
+import timeutil
 
 log = logging.getLogger('rfw.rfwconfig')
+
 
 class RfwConfig(config.Config):
 
@@ -58,10 +63,10 @@ class RfwConfig(config.Config):
             self.whitelist()  # it will also cache the whitelist result
             self.iptables_path()
             self.default_expire()
-        except config.ConfigError, e:
+        except config.ConfigError as e:
             log.error(str(e))
             sys.exit(1)
-        except Exception, e:
+        except Exception as e:
             # other errors need to be wrapped to include the config file path info
             log.error(self.config_error(str(e)))
             sys.exit(1)
@@ -71,36 +76,35 @@ class RfwConfig(config.Config):
             if self.is_outward_server():
                 self.outward_server_certfile()
                 self.outward_server_keyfile()
-        except config.ConfigError, e:
+        except config.ConfigError as e:
             log.error(str(e))
             log.error('Before running rfw you must generate or import certificates. See /etc/rfw/deploy/README.rst')
             sys.exit(1)
 
-
-
-
     def is_outward_server(self):
-        return self._getflag("outward.server", "outward.server not enabled. Ignoring outward.server.port and outward.server.ip if present.")
+        return self._getflag("outward.server",
+                             "outward.server not enabled. Ignoring outward.server.port and outward.server.ip if "
+                             "present.")
 
     def outward_server_port(self):
         if self.is_outward_server():
-            print "Outward server found"
+            print("Outward server found")
 
             port = self._get("outward.server.port")
             if port and iputil.validate_port(port):
                 return port
             else:
-                raise self.config_error("Wrong outward.server.port value. It should be a single number from the 1..65535 range")
+                raise self.config_error(
+                    "Wrong outward.server.port value. It should be a single number from the 1..65535 range")
         else:
-            print "Outward server not found"
+            print("Outward server not found")
             self.config_error("outward.server.port read while outward.server not enabled")
-
 
     def outward_server_ip(self):
         if self.is_outward_server():
             try:
                 return self._get("outward.server.ip")
-            except NoOptionError, e:
+            except NoOptionError as e:
                 raise self.config_error(str(e))
         else:
             raise self.config_error("outward.server.ip read while outward.server not enabled")
@@ -111,17 +115,14 @@ class RfwConfig(config.Config):
         else:
             raise self.config_error("outward.server.certfile read while outward.server not enabled")
 
-
     def outward_server_keyfile(self):
         if self.is_outward_server():
             return self._getfile("outward.server.keyfile")
         else:
             raise self.config_error("outward.server.keyfile read while outward.server not enabled")
 
-
     def is_local_server(self):
         return self._getflag("local.server", "local.server not enabled. Ignoring local.server.port if present.")
-
 
     def local_server_port(self):
         if self.is_local_server():
@@ -130,8 +131,9 @@ class RfwConfig(config.Config):
                 if port and iputil.validate_port(port):
                     return port
                 else:
-                    raise self.config_error("Wrong local.server.port value. It should be a single number from the 1..65535 range")
-            except NoOptionError, e:
+                    raise self.config_error(
+                        "Wrong local.server.port value. It should be a single number from the 1..65535 range")
+            except NoOptionError as e:
                 raise self.config_error(str(e))
         else:
             raise self.config_error("local.server.port read while local.server not enabled")
@@ -145,7 +147,6 @@ class RfwConfig(config.Config):
         else:
             raise self.config_error("local.server.authentication read while local.server not enabled")
 
-
     def auth_username(self):
         if self.is_outward_server() or self.is_local_server_authentication():
             try:
@@ -154,11 +155,11 @@ class RfwConfig(config.Config):
                     return username
                 else:
                     raise self.config_error("auth.username cannot be empty")
-            except NoOptionError, e:
+            except NoOptionError as e:
                 raise self.config_error(str(e))
         else:
-            raise self.config_error("auth.username read while outward.server not enabled and local.server.authentication not enabled")
-
+            raise self.config_error(
+                "auth.username read while outward.server not enabled and local.server.authentication not enabled")
 
     def auth_password(self):
         if self.is_outward_server() or self.is_local_server_authentication():
@@ -168,10 +169,11 @@ class RfwConfig(config.Config):
                     return password
                 else:
                     raise self.config_error("auth.password cannot be empty")
-            except NoOptionError, e:
+            except NoOptionError as e:
                 raise self.config_error(str(e))
         else:
-            raise self.config_error("auth.password read while outward.server not enabled and local.server.authentication not enabled")
+            raise self.config_error(
+                "auth.password read while outward.server not enabled and local.server.authentication not enabled")
 
     def _chain_action(self, name):
         try:
@@ -183,24 +185,23 @@ class RfwConfig(config.Config):
                 raise self.config_error("allowed values for {} are DROP or ACCEPT".format(name))
             else:
                 raise self.config_error("{} cannot be empty. Allowed values are DROP or ACCEPT".format(name))
-        except NoOptionError, e:
+        except NoOptionError as e:
             raise self.config_error(str(e))
-
 
     def whitelist_file(self):
         return self._getfile("whitelist.file")
 
-
     # return cached list of whitelist IP address ranges in CIDR format or individual IP addresses.
     # TODO allow IP ranges with hyphen, cidrize all including individual IPs
     def whitelist(self):
-        #TODO not thread safe but this method is initialized from constructor so it should be fine
+        # TODO not thread safe but this method is initialized from constructor so it should be fine
         if self._whitelist is None:
             wfile = self.whitelist_file()
             with open(wfile) as f:
                 lines = f.readlines()
-            #TODO allow IP ranges: xxx.xxx.xxx.xxx-yyy.yyy.yyy.yyy - need to cidrize, see IpNet.php
-            ips = [iputil.validate_ip_cidr(line, allow_no_mask=True) for line in lines if line.strip() and not line.strip().startswith('#')]
+            # TODO allow IP ranges: xxx.xxx.xxx.xxx-yyy.yyy.yyy.yyy - need to cidrize, see IpNet.php
+            ips = [iputil.validate_ip_cidr(line, allow_no_mask=True) for line in lines if
+                   line.strip() and not line.strip().startswith('#')]
             if False in ips:
                 raise self.config_error("Wrong IP address format in {}".format(wfile))
             if not ips:
@@ -208,14 +209,12 @@ class RfwConfig(config.Config):
             self._whitelist = ips
         return self._whitelist
 
-
     def iptables_path(self):
         ipt = self._get('iptables.path')
         if ipt:
             return ipt
         else:
             raise self.config_error("iptables.path cannot be empty")
-
 
     def default_expire(self):
         """return parsed default.expire in seconds as string
@@ -228,6 +227,3 @@ class RfwConfig(config.Config):
             raise self.config_error("default.expire missing or incorrect format")
         else:
             return str(interval)
-
-
-

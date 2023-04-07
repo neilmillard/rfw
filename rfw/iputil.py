@@ -39,10 +39,10 @@ def ip2long(s):
     return struct.unpack("!L", socket.inet_aton(s))[0]
 
 
-def long2ip(l):
+def long2ip(long):
     """Convert big-endian long representation of IP address to string
     """
-    return socket.inet_ntoa(struct.pack("!L", l))
+    return socket.inet_ntoa(struct.pack("!L", long))
 
 
 def mask2long(mask):
@@ -53,12 +53,12 @@ def mask2long(mask):
 
 
 # deprecated
-def in_iplist(ip, l):
+def in_ip_list(ip, my_list):
     """Check if IP address is in the list.
     List l may contain individual IP addresses or CIDR ranges.
     """
     # no input validations here as it should be fast
-    for item in l:
+    for item in my_list:
         if '/' in item:
             a, mask = item.split('/')
             m = mask2long(int(mask))
@@ -71,11 +71,11 @@ def in_iplist(ip, l):
     return False
 
 
-def ip_in_list(ip, l):
+def ip_in_list(ip, my_list):
     """Check if IP address given as string is in the list.
     Both the ip and list may be individual IP addresses or CIDR ranges.
     """
-    for c in l:
+    for c in my_list:
         if cidr_overlap(ip, c):
             return True
     return False
@@ -92,7 +92,7 @@ def cidr2range(c):
     else:
         start = ip2long(c)
         end = start
-    return (start, end)
+    return start, end
 
 
 def cidr_overlap(c1, c2):
@@ -107,7 +107,7 @@ def ip_ranges_overlap(r1_ipstart, r1_ipend, r2_ipstart, r2_ipend):
     """Check if two IP ranges given as inclusive integer limited ranges overlap
     """
     if not isinstance(r1_ipstart, (int, int)) or not isinstance(r1_ipend, (int, int)) or not isinstance(r2_ipstart, (
-    int, int)) or not isinstance(r2_ipend, (int, int)):
+            int, int)) or not isinstance(r2_ipend, (int, int)):
         raise ValueError('IP address should be integer')
     if r1_ipstart > r1_ipend or r2_ipstart > r2_ipend:
         raise ValueError(
@@ -131,7 +131,7 @@ def validate_ip_cidr(ip, allow_no_mask=False):
         a1, a2, a3, a4 = int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4))
         if a1 < 256 and a2 < 256 and a3 < 256 and a4 < 256:
             ip_canon = "{}.{}.{}.{}".format(a1, a2, a3, a4)
-            if mask and int(mask) >= 0 and int(mask) <= 32:
+            if mask and 0 <= int(mask) <= 32:
                 return "{}/{}".format(ip_canon, mask)
             if allow_no_mask and not mask:
                 return ip_canon
@@ -176,7 +176,7 @@ def validate_mask(mask):
     if not mask:
         return False
     mask = mask.strip()
-    if mask.isdigit() and int(mask) >= 0 and int(mask) <= 32:
+    if mask.isdigit() and 0 <= int(mask) <= 32:
         return mask
     return False
 

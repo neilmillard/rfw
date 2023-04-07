@@ -28,10 +28,12 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-import sys, logging, re
+import logging
 from urllib.parse import parse_qsl, urlparse
 
-import iputil, timeutil, iptables
+import iptables
+import iputil
+import timeutil
 from iptables import Rule
 
 log = logging.getLogger("rfw.cmdparse")
@@ -84,7 +86,7 @@ def parse_command_path(rule_path):
         try:
             return action, build_rule(parts)
         except ValueError as e:
-            raise PathError(rule_path, e.message)
+            raise PathError(rule_path, str(e))
 
     if action == 'list':
 

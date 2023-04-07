@@ -28,10 +28,11 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-from __future__ import print_function
+import logging
+import time
 from threading import Thread
-import time, logging
-import iputil, iptables
+
+import iptables
 from iptables import Iptables
 
 log = logging.getLogger('rfw.rfwthreads')
@@ -45,8 +46,7 @@ class CommandProcessor(Thread):
         self.whitelist = whitelist
         self.expiry_queue = expiry_queue
         self.default_expire = default_expire
-        self.setDaemon(True)
-
+        self.daemon = True
 
     def schedule_expiry(self, rule, directives):
         # put time-bounded command to the expiry_queue
@@ -58,7 +58,6 @@ class CommandProcessor(Thread):
             extup = (expiry_tstamp, expire, rule)
             self.expiry_queue.put_nowait(extup)
             log.debug('PUT to Expiry Queue. expiry_queue: {}'.format(self.expiry_queue.queue))
-
 
     def run(self):
         Iptables.read_chains()
@@ -81,15 +80,16 @@ class CommandProcessor(Thread):
                 # check for duplicates, apply rule
                 if modify == 'I':
                     if rule_exists:
-                        log.warn("Trying to insert existing rule: {}. Command ignored.".format(rule))
+                        log.warning("Trying to insert existing rule: {}. Command ignored.".format(rule))
                     else:
                         if rule.target == 'CREATE':
                             modify = 'N'
-                        if ':' in rule.chain: # renaming a chain
+                        if ':' in rule.chain:  # renaming a chain
                             modify = 'E'
 
                         Iptables.exe_rule(modify, rule)
-                        # schedule expiry timeout if present. Only for Insert rules and only if the rule didn't exist before (so it was added now)
+                        # schedule expiry timeout if present. Only for Insert rules and only if the rule didn't exist
+                        # before (so it was added now)
                         self.schedule_expiry(rule, directives)
 
                         if rule.target != 'CREATE':
@@ -108,7 +108,8 @@ class CommandProcessor(Thread):
                     if rule_exists:
                         if rule.target == 'CREATE':
                             modify = 'X'
-                        #TODO delete rules in the loop to delete actual iptables duplicates. It's to satisfy idempotency and plays well with common sense
+                        # TODO delete rules in the loop to delete actual iptables duplicates. It's to satisfy
+                        #  idempotency and plays well with common sense
                         Iptables.exe_rule(modify, rule)
                         if rule.target != 'CREATE':
                             ruleset.discard(rule)
@@ -117,11 +118,12 @@ class CommandProcessor(Thread):
                             iptables.RULE_CHAINS.remove(rule.chain)
                     else:
                         print("non existing rule")
-                        log.warn("Trying to delete not existing rule: {}. Command ignored.".format(rule))
+                        log.warning("Trying to delete not existing rule: {}. Command ignored.".format(rule))
                 elif modify == 'L':
-                    #TODO rereading the iptables?
+                    # TODO rereading the iptables?
                     pass
-            # Hack to prevent this exception to reach the threading code, preventing this thread from running more than this
+            # Hack to prevent this exception to reach the threading code, preventing this thread from running more
+            # than this
             except Exception:
                 pass
             finally:
@@ -129,7 +131,6 @@ class CommandProcessor(Thread):
 
 
 class ExpiryManager(Thread):
-
     # polling interval in seconds that determines time resolution of expire parameter
     POLL_INTERVAL = 1
 
@@ -140,11 +141,11 @@ class ExpiryManager(Thread):
         Thread.__init__(self)
         self.cmd_queue = cmd_queue
         self.expiry_queue = expiry_queue
-        self.setDaemon(True)
-
+        self.daemon = True
 
     def run(self):
-        # Not thread safe! It's OK here because we have single producer and single consumer, where consumer need not atomic 'peek and get'
+        # Not thread safe! It's OK here because we have single producer and single consumer, where consumer need not
+        # atomic 'peek and get'
         def peek(q):
             if q.queue:
                 return q.queue[0]
@@ -163,10 +164,12 @@ class ExpiryManager(Thread):
             if expiry_tstamp > time.time():
                 continue
             try:
-                # get item with lowest priority score. It may be different (but certainly lower) from the one returned by peek() since peek() is not thread safe
+                # get item with lowest priority score. It may be different (but certainly lower) from the one
+                # returned by peek() since peek() is not thread safe
                 expiry_tstamp, expire, rule = self.expiry_queue.get()
                 log.debug('GET from Expiry Queue. expiry_queue: {}'.format(self.expiry_queue.queue))
-                # expire parameter is valid only for 'I' (insert) commands, so expiring the rule is as simple as deleting it
+                # expire parameter is valid only for 'I' (insert) commands, so expiring the rule is as simple as
+                # deleting it
                 directives = {}
                 tup = ('D', rule, directives)
                 self.cmd_queue.put_nowait(tup)
@@ -174,23 +177,14 @@ class ExpiryManager(Thread):
                 self.expiry_queue.task_done()
 
 
-
 class ServerRunner(Thread):
 
     def __init__(self, httpd):
         Thread.__init__(self)
         self.httpd = httpd
-        self.setDaemon(True)
+        self.daemon = True
 
     def run(self):
         sa = self.httpd.socket.getsockname()
         log.info("Serving HTTP on {} port {}".format(sa[0], sa[1]))
         self.httpd.serve_forever()
-
-
-
-
-
-
-
-

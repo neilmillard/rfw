@@ -30,6 +30,7 @@
 
 import re
 
+
 def parse_interval(t):
     """Parse time interval t given as string in one of the following formats:
     - <number> representing number of seconds

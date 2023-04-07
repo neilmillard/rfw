@@ -169,7 +169,7 @@ def create_request_handlers(rfwconf, cmd_queue, expiry_queue):
 
     class OutwardRequestHandler(BasicAuthRequestHandler):
 
-        def creds_check(self, user, password):
+        def credentials_check(self, user, password):
             return user == rfwconf.auth_username() and password == rfwconf.auth_password()
 
         def go(self, modify, urlpath, remote_addr):

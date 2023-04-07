@@ -28,22 +28,19 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-import subprocess, logging, re
+import logging
+import subprocess
 
 log = logging.getLogger("rfw.log")
 
-def call(lcmd):
+
+def call(local_cmd):
     try:
-        log.debug('Call: {}'.format(' '.join(lcmd)))
-        out = subprocess.check_output(lcmd, stderr=subprocess.STDOUT)
-        if out: 
+        log.debug('Call: {}'.format(' '.join(local_cmd)))
+        out = subprocess.check_output(local_cmd, stderr=subprocess.STDOUT)
+        if out:
             log.debug("Call output: {}".format(out))
         return out
-    except subprocess.CalledProcessError, e:
-        log.error("Error code {} returned when called '{}'. Command output: '{}'".format(e.returncode, e.cmd, e.output))
+    except subprocess.CalledProcessError as e:
+        log.error(f"Error code {e.returncode} returned when called '{e.cmd}'. Command output: '{e.output}'")
         raise e
-
-
-
-
-

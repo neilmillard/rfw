@@ -28,18 +28,22 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-from __future__ import print_function
-import logging, sys, types, os.path, re
-from ConfigParser import RawConfigParser, NoOptionError
+import logging
+import os.path
+import sys
+from configparser import RawConfigParser, NoOptionError
 
-# Follow the logging convention:
-# - Modules intended as reusable libraries have names 'lib.<modulename>' what allows to configure single parent 'lib' logger for all libraries in the consuming application
-# - Add NullHandler (since Python 2.7) to prevent error message if no other handlers present. The consuming app may add other handlers to 'lib' logger or its children.
+# Follow the logging convention: - Modules intended as reusable libraries have names 'lib.<modulename>' what allows
+# to configure single parent 'lib' logger for all libraries in the consuming application - Add NullHandler (since
+# Python 2.7) to prevent error message if no other handlers present. The consuming app may add other handlers to
+# 'lib' logger or its children.
 log = logging.getLogger('lib.{}'.format(__name__))
 log.addHandler(logging.NullHandler())
 
+
 class ConfigError(Exception):
     def __init__(self, msg):
+        self.message = msg
         Exception.__init__(self, msg)
 
 
@@ -61,15 +65,14 @@ class Config:
         """
         return self.parser.get(self.section, opt)
 
-
     def _getflag(self, opt, log_msg=""):
         """Return True if valueless option present in config file. False otherwise.
         """
         try:
-            #None means that the option is present in the config file
+            # None means that the option is present in the config file
             return self._get(opt) is None
         except NoOptionError:
-            #ignore, no such option is a valid case. Optionally log the info message
+            # ignore, no such option is a valid case. Optionally log the info message
             if log_msg:
                 log.info(log_msg)
         return False
@@ -81,29 +84,30 @@ class Config:
             return filename
         else:
             raise self.config_error("Could not find the file {} = {}".format(opt, filename))
- 
+
     # create ConfigError
     def config_error(self, msg):
         return ConfigError('Configuration error in {}: {}'.format(self.path, msg))
 
 
-
-
 def set_logging(log, loglevelnum, logfile, verbose_console=False):
-    """Configure standard logging for the application. One ERROR level handler to stderr and one file handler with specified loglevelnum to logfile.
-        log argument is the main (parent) application logger.
+    """Configure standard logging for the application. One ERROR level handler to stderr and one file handler with
+        specified loglevelnum to logfile. log argument is the main (parent) application logger.
     """
     # Prevent common error in using this API: loglevelnum is numeric
-    if not loglevelnum in [logging.NOTSET, logging.DEBUG, logging.INFO, logging.WARNING, logging.ERROR, logging.CRITICAL]:
+    if loglevelnum not in [logging.NOTSET, logging.DEBUG, logging.INFO, logging.WARNING, logging.ERROR,
+                           logging.CRITICAL]:
         log.error("Incorrect loglevel value")
         sys.exit(1)
 
     try:
-        # Specific log levels are set on individual handlers, but we must also set the most permissive log level on the logger itself to pass the initial filter.
+        # Specific log levels are set on individual handlers, but we must also set the most permissive log level on
+        # the logger itself to pass the initial filter.
         log.setLevel(logging.DEBUG)
         fh = logging.FileHandler(logfile)
         fh.setLevel(loglevelnum)
-        fh.setFormatter(logging.Formatter('%(asctime)s %(levelname)-8s %(filename)s:%(lineno)d.%(funcName)s() - %(message)s'))
+        fh.setFormatter(
+            logging.Formatter('%(asctime)s %(levelname)-8s %(filename)s:%(lineno)d.%(funcName)s() - %(message)s'))
         log.addHandler(fh)
         ch = logging.StreamHandler()
         if verbose_console:
@@ -113,13 +117,9 @@ def set_logging(log, loglevelnum, logfile, verbose_console=False):
         ch.setFormatter(logging.Formatter('%(levelname)s %(message)s'))
         log.addHandler(ch)
         # add log file handler for libraries according to the logging convention
-        logging.getLogger('lib').addHandler(fh)    
-    except IOError, e:
+        logging.getLogger('lib').addHandler(fh)
+    except IOError as e:
         msg = str(e)
         if e.errno == 13:
             msg += '\nYou need to be root'
         raise ConfigError(msg)
-
-
-
-
