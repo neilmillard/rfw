@@ -31,23 +31,23 @@
 
 from __future__ import print_function
 import sys
+
 pytver = sys.version_info
-if pytver[0] == 2 and pytver[1] >= 7:
+if pytver[0] == 3 and pytver[1] >= 7:
     pass
 else:
-    print("rfw requires python 2.7")
+    print("rfw requires python 3.7+")
     sys.exit(1)
 
-
 import argparse, logging, re, sys, struct, socket, subprocess, signal, time, json, os
-from Queue import Queue, PriorityQueue
+from queue import Queue, PriorityQueue
 from threading import Thread
 import config, rfwconfig, cmdparse, iputil, rfwthreads, iptables
 from sslserver import SSLServer, PlainServer, BasicAuthRequestHandler, CommonRequestHandler
 from iptables import Iptables
 
-
 log = logging.getLogger('rfw')
+
 
 def perr(msg):
     print(msg, file=sys.stderr)
@@ -72,13 +72,11 @@ def create_requesthandlers(rfwconf, cmd_queue, expiry_queue):
         log.error('Could not read {}: {} {}'.format(version_file, e.strerror, e.filename))
     server_ver = 'SecurityKISS rfw/{}'.format(ver)
 
-
     def check_whitelist_conflict(ip, whitelist):
         if ip != '0.0.0.0/0' and iputil.ip_in_list(ip, whitelist):
             msg = 'Ignoring the request conflicting with the whitelist'
             log.warn(msg)
             raise Exception(msg)
-
 
     def process(handler, modify, urlpath):
         # modify should be 'D' for Delete or 'I' for Insert understood as -D and -I iptables flags
@@ -103,7 +101,9 @@ def create_requesthandlers(rfwconf, cmd_queue, expiry_queue):
                 elif rfwconf.is_non_restful():
                     mod = directives.get('modify')
                     if not mod:
-                        raise Exception('Unrecognized command. Non-restful enabled, you need to provide modify parameter.'.format(action))
+                        raise Exception(
+                            'Unrecognized command. Non-restful enabled, you need to provide modify parameter.'.format(
+                                action))
                     if mod == 'insert':
                         modify = 'I'
                     elif mod == 'delete':
@@ -138,9 +138,7 @@ def create_requesthandlers(rfwconf, cmd_queue, expiry_queue):
             # logging as error disabled - bad client request is not an error
             # log.exception(msg)
             log.info(msg)
-            return handler.http_resp(400, msg) # Bad Request
-
-
+            return handler.http_resp(400, msg)  # Bad Request
 
     class LocalRequestHandler(CommonRequestHandler):
 
@@ -162,8 +160,6 @@ def create_requesthandlers(rfwconf, cmd_queue, expiry_queue):
         def do_GET(self):
             self.go('L', self.path, self.client_address[0])
 
-
-
     class OutwardRequestHandler(BasicAuthRequestHandler):
 
         def version_string(self):
@@ -173,10 +169,14 @@ def create_requesthandlers(rfwconf, cmd_queue, expiry_queue):
             return user == rfwconf.auth_username() and password == rfwconf.auth_password()
 
         def go(self, modify, urlpath, remote_addr):
-            # authenticate by checking if client IP is in the whitelist - normally reqests from non-whitelisted IPs should be blocked by firewall beforehand
+            # authenticate by checking if client IP is in the whitelist - normally requests from non-whitelisted IPs
+            # should be blocked by firewall beforehand
             if not iputil.ip_in_list(remote_addr, rfwconf.whitelist()):
-                log.error('Request from client IP: {} which is not authorized in the whitelist. It should have been blocked by firewall.'.format(remote_addr))
-                return self.http_resp(403, '') # Forbidden
+                log.error(
+                    'Request from client IP: {} which is not authorized in the whitelist.'
+                    ' It should have been blocked by firewall.'.format(
+                        remote_addr))
+                return self.http_resp(403, '')  # Forbidden
 
             process(self, modify, urlpath)
 
@@ -189,11 +189,7 @@ def create_requesthandlers(rfwconf, cmd_queue, expiry_queue):
         def do_GET(self):
             self.go('L', self.path, self.client_address[0])
 
-
     return LocalRequestHandler, OutwardRequestHandler
-
-
-
 
 
 def create_args_parser():
@@ -202,11 +198,15 @@ def create_args_parser():
     LOG_LEVEL = 'DEBUG'
     LOG_FILE = '/var/log/rfw.log'
     parser = argparse.ArgumentParser(description='rfw - Remote Firewall')
-    parser.add_argument('-f', default=CONFIG_FILE, metavar='CONFIGFILE', dest='configfile', help='rfw config file (default {})'.format(CONFIG_FILE))
-    parser.add_argument('--loglevel', default=LOG_LEVEL, help='Log level (default {})'.format(LOG_LEVEL), choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'])
+    parser.add_argument('-f', default=CONFIG_FILE, metavar='CONFIGFILE', dest='configfile',
+                        help='rfw config file (default {})'.format(CONFIG_FILE))
+    parser.add_argument('--loglevel', default=LOG_LEVEL, help='Log level (default {})'.format(LOG_LEVEL),
+                        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'])
     parser.add_argument('--logfile', default=LOG_FILE, help='Log file (default {})'.format(LOG_FILE))
-    parser.add_argument('-v', help='Verbose console output. Sets DEBUG log level for stderr logger (default ERROR)', action='store_true')
+    parser.add_argument('-v', help='Verbose console output. Sets DEBUG log level for stderr logger (default ERROR)',
+                        action='store_true')
     return parser
+
 
 def parse_args():
     parser = create_args_parser()
@@ -222,7 +222,7 @@ def startup_sanity_check():
         Iptables.verify_install()
         Iptables.verify_permission()
         Iptables.verify_original()
-    except Exception, e:
+    except Exception as e:
         log.critical(e)
         sys.exit(1)
 
@@ -231,6 +231,7 @@ def __sigTERMhandler(signum, frame):
     log.debug("Caught signal {}. Exiting".format(signum))
     perr('')
     stop()
+
 
 def stop():
     logging.shutdown()
@@ -277,18 +278,17 @@ def rfw_init_rules(rfwconf):
         try:
             Iptables.exe(['-D', 'INPUT', '-p', 'tcp', '--dport', rfw_port, '-s', ip, '-j', 'ACCEPT'])
             Iptables.exe(['-D', 'OUTPUT', '-p', 'tcp', '--sport', rfw_port, '-d', ip, '-j', 'ACCEPT'])
-        except subprocess.CalledProcessError, e:
+        except subprocess.CalledProcessError as e:
             pass  # ignore
         Iptables.exe(['-I', 'INPUT', '-p', 'tcp', '--dport', rfw_port, '-s', ip, '-j', 'ACCEPT'])
         Iptables.exe(['-I', 'OUTPUT', '-p', 'tcp', '--sport', rfw_port, '-d', ip, '-j', 'ACCEPT'])
 
 
 def main():
-
     args = parse_args()
     try:
         config.set_logging(log, args.loglevelnum, args.logfile, args.v)
-    except config.ConfigError, e:
+    except config.ConfigError as e:
         perr(e.message)
         sys.exit(1)
 
@@ -300,7 +300,7 @@ def main():
 
     try:
         rfwconf = rfwconfig.RfwConfig(args.configfile)
-    except IOError, e:
+    except IOError as e:
         perr(e.message)
         create_args_parser().print_usage()
         sys.exit(1)
@@ -313,7 +313,6 @@ def main():
     signal.signal(signal.SIGTERM, __sigTERMhandler)
     signal.signal(signal.SIGINT, __sigTERMhandler)
     # TODO we may also need to ignore signal.SIGHUP in daemon mode
-
 
     Iptables.loadChains()
     rules = Iptables.load().rules
@@ -332,9 +331,9 @@ def main():
     cmd_queue = Queue()
 
     rfwthreads.CommandProcessor(cmd_queue,
-                            rfwconf.whitelist(),
-                            expiry_queue,
-                            rfwconf.default_expire()).start()
+                                rfwconf.whitelist(),
+                                expiry_queue,
+                                rfwconf.default_expire()).start()
 
     rfwthreads.ExpiryManager(cmd_queue, expiry_queue).start()
 
@@ -344,21 +343,22 @@ def main():
     if rfwconf.is_outward_server():
         server_address = (rfwconf.outward_server_ip(), int(rfwconf.outward_server_port()))
         httpd = SSLServer(
-                    server_address,
-                    OutwardHandlerClass,
-                    rfwconf.outward_server_certfile(),
-                    rfwconf.outward_server_keyfile())
+            server_address,
+            OutwardHandlerClass,
+            rfwconf.outward_server_certfile(),
+            rfwconf.outward_server_keyfile())
         rfwthreads.ServerRunner(httpd).start()
 
     if rfwconf.is_local_server():
         server_address = ('127.0.0.1', int(rfwconf.local_server_port()))
         httpd = PlainServer(
-                    server_address,
-                    LocalHandlerClass)
+            server_address,
+            LocalHandlerClass)
         rfwthreads.ServerRunner(httpd).start()
 
     # wait forever
     time.sleep(1e9)
+
 
 if __name__ == "__main__":
     main()
