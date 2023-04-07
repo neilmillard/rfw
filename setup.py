@@ -28,13 +28,17 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-import sys, os, io, re
-from setuptools.command.install import install
+import io
+import os
+import re
+import sys
+
 from setuptools import setup
+from setuptools.command.install import install
 
 pytver = sys.version_info
 
-if pytver[0] == 2 and pytver[1] >= 7:
+if pytver[0] == 3 and pytver[1] >= 7:
     pass
 else:
     print("rfw requires python 2.7")
@@ -48,8 +52,8 @@ class post_install(install):
         install.run(self)
         # custom post install message
         print('\n\nBefore running rfw you must generate or import certificates. See /etc/rfw/deploy/README.rst\n\n')
-        print('To install the RFW system script, please run \n\n\t\tupdate-rc.d rfw defaults\n\t\tchmod +x /etc/init.d/rfw\n')
-
+        print(
+            'To install the RFW system script, please run \n\n\t\tupdate-rc.d rfw defaults\n\t\tchmod +x /etc/init.d/rfw\n')
 
 
 # Utility function to read the README file used for long description.
@@ -58,37 +62,38 @@ def read(*filenames, **kwargs):
     sep = kwargs.get('sep', '\n')
     buf = []
     for filename in filenames:
-        fpath = os.path.join(os.path.dirname(__file__), filename)
-        with io.open(fpath, encoding=encoding) as f:
+        fspath = os.path.join(os.path.dirname(__file__), filename)
+        with io.open(fspath, encoding=encoding) as f:
             buf.append(f.read())
     return sep.join(buf)
-
 
 
 ver = '0.0.0'
 version_file = os.path.join(os.path.dirname(__file__), 'rfw', '_version.py')
 with open(version_file) as f:
-    verline = f.read().strip()
-    VSRE = r"^__version__ = ['\"]([^'\"]*)['\"]"
-    mo = re.search(VSRE, verline, re.M)
+    verLine = f.read().strip()
+    vsRE = r"^__version__ = ['\"]([^'\"]*)['\"]"
+    mo = re.search(vsRE, verLine, re.M)
     if mo:
         ver = mo.group(1)
 
-
 setup(
-    name = "rfw",
-    version = ver,
-    author = "SecurityKISS Ltd",
-    author_email = "open.source@securitykiss.com",
-    description = ("Remote firewall as a web service. REST API for iptables."),
-    license = "MIT",
-    keywords = "rfw remote firewall iptables REST web service drop accept ban allow whitelist fail2ban",
-    url = "https://github.com/securitykiss-com/rfw",
-    packages = ['rfw'],
-    scripts = ['bin/rfw'],
-    data_files = [  ('/etc/logrotate.d', ['config/logrotate.d/rfw']), ('/etc/init.d', ['config/init.d/rfw']),('/etc/rfw', ['config/rfw.conf', 'config/white.list']), ('/etc/rfw/deploy', ['config/deploy/rfwgen', 'config/deploy/README.rst']), ('/etc/rfw/ssl', ['config/ssl/PUT_SERVER_KEYS_HERE'])],
-    long_description = read('README.rst', 'CHANGES.rst'),
-    cmdclass = {'install': post_install},
+    name="rfw",
+    version=ver,
+    author="SecurityKISS Ltd",
+    author_email="open.source@securitykiss.com",
+    description="Remote firewall as a web service. REST API for iptables.",
+    license="MIT",
+    keywords="rfw remote firewall iptables REST web service drop accept ban allow whitelist fail2ban",
+    url="https://github.com/securitykiss-com/rfw",
+    packages=['rfw'],
+    scripts=['bin/rfw'],
+    data_files=[('/etc/logrotate.d', ['config/logrotate.d/rfw']), ('/etc/init.d', ['config/init.d/rfw']),
+                ('/etc/rfw', ['config/rfw.conf', 'config/white.list']),
+                ('/etc/rfw/deploy', ['config/deploy/rfwgen', 'config/deploy/README.rst']),
+                ('/etc/rfw/ssl', ['config/ssl/PUT_SERVER_KEYS_HERE'])],
+    long_description=read('README.rst', 'CHANGES.rst'),
+    cmdclass={'install': post_install},
     classifiers=[
         "Development Status :: 4 - Beta",
         "Environment :: Console",
@@ -100,6 +105,3 @@ setup(
         "License :: OSI Approved :: MIT License",
     ],
 )
-
-
-

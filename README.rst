@@ -79,7 +79,7 @@ Examples:
 Deployment
 ----------
 
-Requires Python 2.7
+Requires Python 3.7
 
 Install from PyPI::
 

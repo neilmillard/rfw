@@ -68,7 +68,7 @@ def create_requesthandlers(rfwconf, cmd_queue, expiry_queue):
                 ver = mo.group(1)
             else:
                 log.error('Could not find version string in {}'.format(version_file))
-    except IOError, e:
+    except IOError as e:
         log.error('Could not read {}: {} {}'.format(version_file, e.strerror, e.filename))
     server_ver = 'SecurityKISS rfw/{}'.format(ver)
 
@@ -133,8 +133,8 @@ def create_requesthandlers(rfwconf, cmd_queue, expiry_queue):
                 return handler.http_resp(200, ctup)
             else:
                 raise Exception('Unrecognized command.')
-        except Exception, e:
-            msg = 'ERROR: {}'.format(e.message)
+        except Exception as err:
+            msg = 'ERROR: {}'.format(err.message)
             # logging as error disabled - bad client request is not an error
             # log.exception(msg)
             log.info(msg)

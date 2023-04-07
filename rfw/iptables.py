@@ -123,7 +123,7 @@ class Iptables:
         try:
             Iptables.exe(['-h'])
             #subprocess.check_output([Iptables.ipt_path, '-h'], stderr=subprocess.STDOUT)
-        except OSError, e:
+        except OSError as e:
             raise Exception("Could not find {}. Check if it is correctly installed and if the path is correct.".format(Iptables.ipt_path))
 
     @staticmethod
@@ -133,7 +133,7 @@ class Iptables:
         try:
             Iptables.exe(['-n', '-L', 'OUTPUT'])
             #subprocess.check_output([Iptables.ipt_path, '-n', '-L', 'OUTPUT'], stderr=subprocess.STDOUT)
-        except subprocess.CalledProcessError, e:
+        except subprocess.CalledProcessError as e:
             raise Exception("No sufficient permission to run {}. You must be root.".format(Iptables.ipt_path))
 
     @staticmethod
@@ -276,16 +276,16 @@ class Iptables:
             if out:
                 log.debug("Iptables.exe() output: {}".format(out))
             return out
-        except subprocess.CalledProcessError, e:
+        except subprocess.CalledProcessError as e:
             # try with a direct subprocess call first
             try:
                 retry_command = ''
                 for key in cmd:
                     retry_command += (key + ' ')
 
-                print "Retrying with: ", retry_command
+                print("Retrying with: ", retry_command)
                 out = subprocess.call(retry_command, shell=True)
-            except subprocess.CalledProcessError, e:
+            except subprocess.CalledProcessError as e:
                 log.error("Error code {} returned when called '{}'. Command output: '{}'".format(e.returncode, e.cmd, e.output))
                 raise e
 

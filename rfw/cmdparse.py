@@ -28,7 +28,9 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-import sys, logging, urlparse, re
+import sys, logging, re
+from urllib.parse import parse_qsl, urlparse
+
 import iputil, timeutil, iptables
 from iptables import Rule
 
@@ -47,7 +49,6 @@ def convert_iface(iface):
         return iface
 
 
-
 class PathError(Exception):
     def __init__(self, path, msg=''):
         Exception.__init__(self, 'Incorrect path: {}. {}'.format(path, msg))
@@ -59,7 +60,7 @@ class PathError(Exception):
 # '/list/input' -> ('list', 'input')
 # '/drop/input/eth0/1.2.3.4' -> ('drop', Rule(...))
 
-def parse_command_path(path):
+def parse_command_path(rule_path):
     # split url path into parts, lowercase, trim trailing slash, return tuple
     def path_parts(path):
         path = path.strip().lower()
@@ -67,38 +68,39 @@ def parse_command_path(path):
             raise PathError(path)
         if path[-1] == '/':
             path = path[:-1]
-        p = map(str.strip, path.split('/'))
-        p = tuple(p[1:])
-        return p
+        _p = list(map(str.strip, path.split('/')))
+        _p = tuple(_p[1:])
+        print(_p)
+        return _p
 
-    p = path_parts(path)
+    parts = path_parts(rule_path)
 
     # for path = '/' return 'help' action
-    if not p:
+    if not parts:
         return 'help', None
 
-    action = p[0]
+    action = parts[0]
 
     if action.upper() in iptables.RULE_TARGETS:
         try:
-            return action, build_rule(p)
-        except ValueError, e:
-            raise PathError(path, e.message)
+            return action, build_rule(parts)
+        except ValueError as e:
+            raise PathError(rule_path, e.message)
 
     if action == 'list':
 
-        if len(p) == 1:
+        if len(parts) == 1:
             return action, None
-        elif len(p) == 2:
-            chain = p[1].upper()
+        elif len(parts) == 2:
+            chain = parts[1].upper()
             if chain in iptables.RULE_CHAINS:
                 return action, chain
             else:
-                raise PathError(path, 'Wrong chain name for list command')
+                raise PathError(rule_path, 'Wrong chain name for list command')
         else:
-            raise PathError(path, 'Too many details for the list command')
+            raise PathError(rule_path, 'Too many details for the list command')
 
-    raise PathError(path)
+    raise PathError(rule_path)
 
 
 # From the path parts tuple build and return Rule for drop/accept/reject type of command
@@ -113,28 +115,28 @@ def build_rule(p):
     if target != 'CREATE' and chain not in iptables.RULE_CHAINS:
         raise ValueError('When not creating one, the chain should be one of {}'.format(iptables.RULE_CHAINS))
 
-    iface1 = None
+    interface1 = None
     ip1 = None
     port1 = None
     if len(p) > 2:
-        iface1 = p[2]
-        if len(iface1) > 16:
+        interface1 = p[2]
+        if len(interface1) > 16:
             raise ValueError('Interface name too long. Max 16 characters')
-        iface1 = convert_iface(iface1)
+        interface1 = convert_iface(interface1)
 
         # Extract an endpoint
-        ip1, port1 = iputil.extractEndpoint(p[3])
+        ip1, port1 = iputil.extract_endpoint(p[3])
 
         if not ip1 or (port1 is not None and not port1):
             raise ValueError('Incorrect IP endpoint')
 
     mask1 = None
-    iface2 = None
+    interface2 = None
     ip2 = None
     port2 = None
     mask2 = None
     extra = ''
-    prot = 'all'
+    protocol = 'all'
     if len(p) > 4:
         i = 4
         # optionally the netmask like: /drop/input/eth0/1.2.3.4/24
@@ -146,13 +148,13 @@ def build_rule(p):
                 raise ValueError('Netmask must be in range from 9 to 32')
         if len(p) > i:
             # iface2 for forward chain /drop/forward/eth0/1.2.3.4/eth1
-            iface2 = p[i]
+            interface2 = p[i]
             i = i + 1
-            if len(iface2) > 16:
+            if len(interface2) > 16:
                 raise ValueError('Interface name too long. Max 16 characters')
-            iface2 = convert_iface(iface2)
+            interface2 = convert_iface(interface2)
             if len(p) > i:
-                ip2, port2 = iputil.extractEndpoint(p[i])
+                ip2, port2 = iputil.extract_endpoint(p[i])
                 i = i + 1
                 if not ip2 or (port2 is not None and not port2):
                     raise ValueError('Incorrect IP endpoint or netmask')
@@ -178,7 +180,7 @@ def build_rule(p):
             raise ValueError('Incorrect netmask value')
 
     if chain == 'INPUT':
-        inp = iface1
+        inp = interface1
         out = '*'
         source = ip1
         if mask1:
@@ -188,10 +190,10 @@ def build_rule(p):
             if 'tcp' not in extra:
                 extra = ('tcp ' + extra).strip()
             extra = extra + ' spt:' + port1
-            prot = 'tcp'
+            protocol = 'tcp'
     elif chain == 'OUTPUT':
         inp = '*'
-        out = iface1
+        out = interface1
         source = '0.0.0.0/0'
         destination = ip1
         if mask1:
@@ -200,11 +202,11 @@ def build_rule(p):
             if 'tcp' not in extra:
                 extra = ('tcp ' + extra).strip()
             extra = extra + ' dpt:' + port1
-            prot = 'tcp'
+            protocol = 'tcp'
     elif chain == 'FORWARD':
-        inp = iface1
-        if iface2:
-            out = iface2
+        inp = interface1
+        if interface2:
+            out = interface2
         else:
             out = '*'
         source = ip1
@@ -220,21 +222,21 @@ def build_rule(p):
             if 'tcp' not in extra:
                 extra = ('tcp ' + extra).strip()
             extra = extra + ' spt:' + port1
-            prot = 'tcp'
+            protocol = 'tcp'
         if port2 is not None:
             if 'tcp' not in extra:
                 extra = ('tcp ' + extra).strip()
             extra = extra + ' dpt:' + port2 if extra is not None else 'dpt:' + port2
-            prot = 'tcp'
+            protocol = 'tcp'
     elif target == 'CREATE':
-        inp = iface1
-        out = iface1
+        inp = interface1
+        out = interface1
         source = '0.0.0.0/0'
         destination = '0.0.0.0/0'
     else:
-        inp = iface1
-        if iface2:
-            out = iface2
+        inp = interface1
+        if interface2:
+            out = interface2
         else:
             out = '*'
         source = ip1
@@ -249,23 +251,22 @@ def build_rule(p):
             if 'tcp' not in extra:
                 extra = ('tcp ' + extra).strip()
             extra = extra + ' spt:' + port1
-            prot = 'tcp'
+            protocol = 'tcp'
         if port2 is not None:
             if 'tcp' not in extra:
                 extra = ('tcp ' + extra).strip()
             extra = extra + ' dpt:' + port2 if extra is not None else 'dpt:' + port2
-            prot = 'tcp'
+            protocol = 'tcp'
         if target == 'SNAT':
             extra = extra + ' to:' + destination
-            destination = '0.0.0.0/0' # Reset destination in order to prevent it from being appended
+            destination = '0.0.0.0/0'  # Reset destination in order to prevent it from being appended
 
-
-    return Rule({'target': target, 'chain': chain, 'prot': prot, 'inp': inp, 'out': out, 'source': source, 'destination': destination, 'extra': extra})
-
+    return Rule({'target': target, 'chain': chain, 'prot': protocol, 'inp': inp, 'out': out, 'source': source,
+                 'destination': destination, 'extra': extra})
 
 
 def parse_command_query(query):
-    params = dict(urlparse.parse_qsl(query))
+    params = dict(parse_qsl(query))
     ret = {}
 
     expire = params.get('expire')
@@ -283,7 +284,6 @@ def parse_command_query(query):
         else:
             raise ValueError('Incorrect wait parameter value')
 
-
     modify = params.get('modify')
     if modify:
         modify = modify.lower()
@@ -292,7 +292,6 @@ def parse_command_query(query):
         else:
             raise ValueError('Incorrect modify parameter value')
     return ret
-
 
 
 def parse_command(url):
@@ -304,12 +303,10 @@ def parse_command(url):
     """
     # split input to path and query
     # path specifies the iptables Rule while query provides additional rfw parameters like expire or wait
-    parsed = urlparse.urlparse(url)
+    parsed = urlparse(url)
     path, query = parsed.path, parsed.query
 
     action, rule = parse_command_path(path)
     directives = parse_command_query(query)
 
     return action, rule, directives
-
-
