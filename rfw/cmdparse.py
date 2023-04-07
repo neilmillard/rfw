@@ -70,7 +70,6 @@ def parse_command_path(rule_path):
             path = path[:-1]
         _p = list(map(str.strip, path.split('/')))
         _p = tuple(_p[1:])
-        print(_p)
         return _p
 
     parts = path_parts(rule_path)

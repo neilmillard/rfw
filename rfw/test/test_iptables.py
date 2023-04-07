@@ -35,15 +35,15 @@ class IptablesTest(TestCase):
         """Test creating Rule objects in various ways
         """
         r1 = Rule({'chain': 'INPUT', 'source': '1.2.3.4'})
-        self.assertEquals(str(r1),
+        self.assertEqual(str(r1),
                           "Rule(chain='INPUT', num=None, pkts=None, bytes=None, target=None, prot='all', opt='--', "
                           "inp='*', out='*', source='1.2.3.4', destination='0.0.0.0/0', extra='')")
         r2 = Rule(chain='INPUT', num=None, pkts=None, bytes=None, target=None, prot='all', opt='--', inp='*', out='*',
                   source='1.2.3.4', destination='0.0.0.0/0', extra='')
-        self.assertEquals(str(r2),
+        self.assertEqual(str(r2),
                           "Rule(chain='INPUT', num=None, pkts=None, bytes=None, target=None, prot='all', opt='--', "
                           "inp='*', out='*', source='1.2.3.4', destination='0.0.0.0/0', extra='')")
         r3 = Rule(['INPUT', None, None, None, None, 'all', '--', '*', '*', '1.2.3.4', '0.0.0.0/0', ''])
-        self.assertEquals(str(r3),
+        self.assertEqual(str(r3),
                           "Rule(chain='INPUT', num=None, pkts=None, bytes=None, target=None, prot='all', opt='--', "
                           "inp='*', out='*', source='1.2.3.4', destination='0.0.0.0/0', extra='')")
