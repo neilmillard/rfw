@@ -36,12 +36,12 @@ import sys
 from setuptools import setup
 from setuptools.command.install import install
 
-pytver = sys.version_info
+python_ver = sys.version_info
 
-if pytver[0] == 3 and pytver[1] >= 7:
+if python_ver[0] == 3 and python_ver[1] >= 7:
     pass
 else:
-    print("rfw requires python 2.7")
+    print("rfw requires python 3.7")
     sys.exit(1)
 
 
@@ -53,7 +53,8 @@ class post_install(install):
         # custom post install message
         print('\n\nBefore running rfw you must generate or import certificates. See /etc/rfw/deploy/README.rst\n\n')
         print(
-            'To install the RFW system script, please run \n\n\t\tupdate-rc.d rfw defaults\n\t\tchmod +x /etc/init.d/rfw\n')
+            'To install the RFW system script, please run \n\n\t\tupdate-rc.d rfw defaults\n'
+            '\t\tchmod +x /etc/init.d/rfw\n')
 
 
 # Utility function to read the README file used for long description.

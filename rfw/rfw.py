@@ -29,41 +29,52 @@
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #
 
-from __future__ import print_function
+import argparse
+import json
+import logging
+import os
+import re
+import signal
+import subprocess
 import sys
+import time
+from queue import Queue, PriorityQueue
 
-pytver = sys.version_info
-if pytver[0] == 3 and pytver[1] >= 7:
+import cmdparse
+import config
+import iptables
+import iputil
+import rfwconfig
+import rfwthreads
+from iptables import Iptables
+from sslserver import SSLServer, PlainServer, BasicAuthRequestHandler, CommonRequestHandler
+
+python_ver = sys.version_info
+if python_ver[0] == 3 and python_ver[1] >= 7:
     pass
 else:
     print("rfw requires python 3.7+")
     sys.exit(1)
 
-import argparse, logging, re, sys, struct, socket, subprocess, signal, time, json, os
-from queue import Queue, PriorityQueue
-from threading import Thread
-import config, rfwconfig, cmdparse, iputil, rfwthreads, iptables
-from sslserver import SSLServer, PlainServer, BasicAuthRequestHandler, CommonRequestHandler
-from iptables import Iptables
-
 log = logging.getLogger('rfw')
 
 
-def perr(msg):
+def print_err(msg):
     print(msg, file=sys.stderr)
 
 
-def create_requesthandlers(rfwconf, cmd_queue, expiry_queue):
-    """Create RequestHandler type. This is a way to avoid global variables: a closure returning a class type that binds rfwconf and cmd_queue inside.
-    """
+def create_request_handlers(rfwconf, cmd_queue, expiry_queue):
+    """Create RequestHandler type. This is a way to avoid global variables: a closure returning a class type that
+  binds rfwconf and cmd_queue inside.
+  """
 
     ver = '0.0.0'
+    version_file = os.path.join(os.path.dirname(__file__), '_version.py')
     try:
-        version_file = os.path.join(os.path.dirname(__file__), '_version.py')
         with open(version_file) as f:
-            verline = f.read().strip()
-            VSRE = r"^__version__ = ['\"]([^'\"]*)['\"]"
-            mo = re.search(VSRE, verline, re.M)
+            version_line = f.read().strip()
+            version_re = r"^__version__ = ['\"]([^'\"]*)['\"]"
+            mo = re.search(version_re, version_line, re.M)
             if mo:
                 ver = mo.group(1)
             else:
@@ -75,15 +86,15 @@ def create_requesthandlers(rfwconf, cmd_queue, expiry_queue):
     def check_whitelist_conflict(ip, whitelist):
         if ip != '0.0.0.0/0' and iputil.ip_in_list(ip, whitelist):
             msg = 'Ignoring the request conflicting with the whitelist'
-            log.warn(msg)
+            log.warning(msg)
             raise Exception(msg)
 
-    def process(handler, modify, urlpath):
+    def process(handler, modify, url_path):
         # modify should be 'D' for Delete or 'I' for Insert understood as -D and -I iptables flags
         assert modify in ['D', 'I', 'L']
 
         try:
-            action, rule, directives = cmdparse.parse_command(urlpath)
+            action, rule, directives = cmdparse.parse_command(url_path)
 
             # log.debug('\nAction: {}\nRule: {}\nDirectives: {}'.format(action, rule, directives))
 
@@ -102,8 +113,7 @@ def create_requesthandlers(rfwconf, cmd_queue, expiry_queue):
                     mod = directives.get('modify')
                     if not mod:
                         raise Exception(
-                            'Unrecognized command. Non-restful enabled, you need to provide modify parameter.'.format(
-                                action))
+                            f'{action} Unrecognized command. Non-restful enabled, you need to provide modify parameter.')
                     if mod == 'insert':
                         modify = 'I'
                     elif mod == 'delete':
@@ -134,16 +144,13 @@ def create_requesthandlers(rfwconf, cmd_queue, expiry_queue):
             else:
                 raise Exception('Unrecognized command.')
         except Exception as err:
-            msg = 'ERROR: {}'.format(err.message)
+            msg = 'ERROR: {}'.format(e.message)
             # logging as error disabled - bad client request is not an error
             # log.exception(msg)
             log.info(msg)
             return handler.http_resp(400, msg)  # Bad Request
 
     class LocalRequestHandler(CommonRequestHandler):
-
-        def version_string(self):
-            return server_ver
 
         def go(self, modify, urlpath, remote_addr):
             process(self, modify, urlpath)
@@ -161,9 +168,6 @@ def create_requesthandlers(rfwconf, cmd_queue, expiry_queue):
             self.go('L', self.path, self.client_address[0])
 
     class OutwardRequestHandler(BasicAuthRequestHandler):
-
-        def version_string(self):
-            return server_ver
 
         def creds_check(self, user, password):
             return user == rfwconf.auth_username() and password == rfwconf.auth_password()
@@ -193,16 +197,16 @@ def create_requesthandlers(rfwconf, cmd_queue, expiry_queue):
 
 
 def create_args_parser():
-    CONFIG_FILE = '/etc/rfw/rfw.conf'
+    config_file = '/etc/rfw/rfw.conf'
     # TODO change default log level to INFO
-    LOG_LEVEL = 'DEBUG'
-    LOG_FILE = '/var/log/rfw.log'
+    log_level = 'DEBUG'
+    log_file = '/var/log/rfw.log'
     parser = argparse.ArgumentParser(description='rfw - Remote Firewall')
-    parser.add_argument('-f', default=CONFIG_FILE, metavar='CONFIGFILE', dest='configfile',
-                        help='rfw config file (default {})'.format(CONFIG_FILE))
-    parser.add_argument('--loglevel', default=LOG_LEVEL, help='Log level (default {})'.format(LOG_LEVEL),
+    parser.add_argument('-f', default=config_file, metavar='CONFIGFILE', dest='configfile',
+                        help='rfw config file (default {})'.format(config_file))
+    parser.add_argument('--loglevel', default=log_level, help='Log level (default {})'.format(log_level),
                         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'])
-    parser.add_argument('--logfile', default=LOG_FILE, help='Log file (default {})'.format(LOG_FILE))
+    parser.add_argument('--logfile', default=log_file, help='Log file (default {})'.format(log_file))
     parser.add_argument('-v', help='Verbose console output. Sets DEBUG log level for stderr logger (default ERROR)',
                         action='store_true')
     return parser
@@ -217,7 +221,7 @@ def parse_args():
 
 def startup_sanity_check():
     """Check for most common errors to give informative message to the user
-    """
+  """
     try:
         Iptables.verify_install()
         Iptables.verify_permission()
@@ -229,7 +233,7 @@ def startup_sanity_check():
 
 def __sigTERMhandler(signum, frame):
     log.debug("Caught signal {}. Exiting".format(signum))
-    perr('')
+    print_err('')
     stop()
 
 
@@ -240,13 +244,17 @@ def stop():
 
 def rfw_init_rules(rfwconf):
     """Clean and insert the rfw init rules.
-    The rules block all INPUT/OUTPUT traffic on rfw ssl port except for whitelisted IPs.
-    Here are the rules that should be created assuming that that the only whitelisted IP is 127.0.0.1:
-        Rule(chain='INPUT', num='1', pkts='0', bytes='0', target='ACCEPT', prot='tcp', opt='--', inp='*', out='*', source='127.0.0.1', destination='0.0.0.0/0', extra='tcp dpt:7393')
-        Rule(chain='INPUT', num='4', pkts='0', bytes='0', target='DROP', prot='tcp', opt='--', inp='*', out='*', source='0.0.0.0/0', destination='0.0.0.0/0', extra='tcp dpt:7393')
-        Rule(chain='OUTPUT', num='1', pkts='0', bytes='0', target='ACCEPT', prot='tcp', opt='--', inp='*', out='*', source='0.0.0.0/0', destination='127.0.0.1', extra='tcp spt:7393')
-        Rule(chain='OUTPUT', num='4', pkts='0', bytes='0', target='DROP', prot='tcp', opt='--', inp='*', out='*', source='0.0.0.0/0', destination='0.0.0.0/0', extra='tcp spt:7393')
-    """
+  The rules block all INPUT/OUTPUT traffic on rfw ssl port except for whitelisted IPs.
+  Here are the rules that should be created assuming that that the only whitelisted IP is 127.0.0.1:
+      Rule(chain='INPUT', num='1', pkts='0', bytes='0', target='ACCEPT', prot='tcp', opt='--', inp='*', out='*',
+           source='127.0.0.1', destination='0.0.0.0/0', extra='tcp dpt:7393')
+      Rule(chain='INPUT', num='4', pkts='0', bytes='0', target='DROP', prot='tcp', opt='--', inp='*', out='*',
+          source='0.0.0.0/0', destination='0.0.0.0/0', extra='tcp dpt:7393')
+      Rule(chain='OUTPUT', num='1', pkts='0', bytes='0', target='ACCEPT', prot='tcp', opt='--', inp='*', out='*',
+           source='0.0.0.0/0', destination='127.0.0.1', extra='tcp spt:7393')
+      Rule(chain='OUTPUT', num='4', pkts='0', bytes='0', target='DROP', prot='tcp', opt='--', inp='*', out='*',
+           source='0.0.0.0/0', destination='0.0.0.0/0', extra='tcp spt:7393')
+  """
     if rfwconf.is_outward_server():
         rfw_port = rfwconf.outward_server_port()
     else:
@@ -278,7 +286,7 @@ def rfw_init_rules(rfwconf):
         try:
             Iptables.exe(['-D', 'INPUT', '-p', 'tcp', '--dport', rfw_port, '-s', ip, '-j', 'ACCEPT'])
             Iptables.exe(['-D', 'OUTPUT', '-p', 'tcp', '--sport', rfw_port, '-d', ip, '-j', 'ACCEPT'])
-        except subprocess.CalledProcessError as e:
+        except subprocess.CalledProcessError:
             pass  # ignore
         Iptables.exe(['-I', 'INPUT', '-p', 'tcp', '--dport', rfw_port, '-s', ip, '-j', 'ACCEPT'])
         Iptables.exe(['-I', 'OUTPUT', '-p', 'tcp', '--sport', rfw_port, '-d', ip, '-j', 'ACCEPT'])
@@ -289,7 +297,7 @@ def main():
     try:
         config.set_logging(log, args.loglevelnum, args.logfile, args.v)
     except config.ConfigError as e:
-        perr(e.message)
+        print_err(e.message)
         sys.exit(1)
 
     if args.v:
@@ -301,7 +309,7 @@ def main():
     try:
         rfwconf = rfwconfig.RfwConfig(args.configfile)
     except IOError as e:
-        perr(e.message)
+        print_err(e.message)
         create_args_parser().print_usage()
         sys.exit(1)
 
@@ -339,12 +347,12 @@ def main():
 
     # Passing HandlerClass to SSLServer is very limiting, seems like a bad design of BaseServer.
     # In order to pass extra info to RequestHandler without using global variable we have to wrap the class in closure.
-    LocalHandlerClass, OutwardHandlerClass = create_requesthandlers(rfwconf, cmd_queue, expiry_queue)
+    local_handler_class, outward_handler_class = create_request_handlers(rfwconf, cmd_queue, expiry_queue)
     if rfwconf.is_outward_server():
         server_address = (rfwconf.outward_server_ip(), int(rfwconf.outward_server_port()))
         httpd = SSLServer(
             server_address,
-            OutwardHandlerClass,
+            outward_handler_class,
             rfwconf.outward_server_certfile(),
             rfwconf.outward_server_keyfile())
         rfwthreads.ServerRunner(httpd).start()
@@ -353,7 +361,7 @@ def main():
         server_address = ('127.0.0.1', int(rfwconf.local_server_port()))
         httpd = PlainServer(
             server_address,
-            LocalHandlerClass)
+            local_handler_class)
         rfwthreads.ServerRunner(httpd).start()
 
     # wait forever
